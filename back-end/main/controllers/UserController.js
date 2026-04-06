@@ -1,0 +1,314 @@
+const mongoose          = require("mongoose");
+const User              = require("../models/User");
+const Cart              = require("../models/Cart");
+const WishList          = require("../models/WishList");
+const RefreshToken      = require("../models/RefreshToken");
+const LoyaltyTransaction = require("../models/LoyaltyTransaction");
+
+// ─── Sanitize helper (strip HTML tags để chống stored XSS) ───────────────────
+// TODO: Thay bằng sanitize-html package khi đã cài: npm install sanitize-html
+const sanitize = (value) => {
+  if (typeof value !== "string") return value;
+  return value.replace(/<[^>]*>/g, "").trim();
+};
+
+// ─── 6.1 Get Profile ──────────────────────────────────────────────────────────
+// GET /api/users/profile
+// Chỉ trả dữ liệu của chính user đang đăng nhập (lấy id từ JWT payload)
+exports.getProfile = async (req, res, next) => {
+  try {
+    const user = await User.findOne({
+      _id: req.user.id,
+      deletedAt: null,
+    }).select("-password -googleId -__v");
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+    }
+
+    return res.status(200).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.2 Get User (by ID) ────────────────────────────────────────────────────
+// GET /api/users/:id
+// Admin xem được full info; user thường chỉ xem thông tin public của chính mình
+exports.getUser = async (req, res, next) => {
+  try {
+    const { id: targetId } = req.params;
+    const requesterId = req.user.id;
+    const isAdmin = req.user.role === "admin";
+
+    // Không phải admin và đang xem người khác → từ chối
+    // toString() vì targetId (string từ params) và requesterId (ObjectId từ JWT) khác kiểu
+    if (!isAdmin && targetId !== requesterId.toString()) {
+      return res.status(403).json({ success: false, message: "Không có quyền truy cập." });
+    }
+
+    // Admin xem full info; user thường chỉ lấy field public
+    const selectFields = isAdmin
+      ? "-password -googleId -__v"
+      : "-password -googleId -__v -phone -address -isBanned -bannedReason -bannedAt -deletedAt";
+
+    const user = await User.findOne({ _id: targetId, deletedAt: null }).select(selectFields);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Người dùng không tồn tại." });
+    }
+
+    return res.status(200).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.3 Update Profile ──────────────────────────────────────────────────────
+// PUT /api/users/profile
+// Whitelist field cứng — không thể cập nhật role, email, isBanned qua endpoint này
+exports.updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { fullName, phone, address } = req.body;
+
+    // Whitelist fields — không chấp nhận bất kỳ field nào khác
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = sanitize(fullName);
+    if (phone    !== undefined) updateData.phone    = sanitize(phone);
+    if (address  !== undefined) updateData.address  = sanitize(address);
+
+    // Avatar từ Cloudinary (upload qua multer middleware)
+    if (req.file?.path) {
+      updateData.avatarUrl = req.file.path;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ success: false, message: "Không có dữ liệu để cập nhật." });
+    }
+
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId, deletedAt: null },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password -googleId -__v");
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Cập nhật thông tin thành công.",
+      data: updatedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.4 Delete Account ──────────────────────────────────────────────────────
+// DELETE /api/users/account
+// Soft delete — không xóa khỏi DB để bảo toàn lịch sử đơn hàng, review, v.v.
+exports.deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findOne({ _id: userId, deletedAt: null });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+    }
+
+    // Soft delete — set deletedAt thay vì xóa record
+    await User.updateOne({ _id: userId }, { deletedAt: new Date() });
+
+    // Dọn dẹp cart và wishlist của user
+    await Promise.all([
+      Cart.findOneAndDelete({ userId }),
+      WishList.findOneAndDelete({ userId }),
+    ]);
+
+    // Revoke toàn bộ phiên đăng nhập
+    await RefreshToken.deleteMany({ userId });
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+    });
+
+    console.info(`[AUDIT] User ${userId} self-deleted at ${new Date().toISOString()}`);
+
+    return res.status(200).json({ success: true, message: "Tài khoản đã được xóa thành công." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.5 Ban User (Admin only) ────────────────────────────────────────────────
+// PATCH /api/users/:id/ban
+// Route bảo vệ bởi verifyToken + authorizeAdmin
+exports.banUser = async (req, res, next) => {
+  try {
+    const { id: targetId } = req.params;
+    const adminId = req.user.id;
+    const { isBanned, bannedReason } = req.body;
+
+    // Admin không thể tự ban chính mình
+    // toString() vì targetId (string từ params) và adminId (ObjectId từ JWT) khác kiểu
+    if (targetId === adminId.toString()) {
+      return res.status(400).json({ success: false, message: "Không thể khóa tài khoản của chính mình." });
+    }
+
+    const target = await User.findOne({ _id: targetId, deletedAt: null });
+    if (!target) {
+      return res.status(404).json({ success: false, message: "Người dùng không tồn tại." });
+    }
+
+    const updateData = isBanned
+      ? { isBanned: true,  bannedReason, bannedAt: new Date() }
+      : { isBanned: false, bannedReason: "", bannedAt: null };
+
+    await User.updateOne({ _id: targetId }, { $set: updateData });
+
+    // Kick toàn bộ phiên đăng nhập ngay khi ban
+    if (isBanned) {
+      await RefreshToken.deleteMany({ userId: targetId });
+    }
+
+    console.info(
+      `[AUDIT] Admin ${adminId} ${isBanned ? "banned" : "unbanned"} user ${targetId} ` +
+      `at ${new Date().toISOString()}. Reason: ${bannedReason || "N/A"}`
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: isBanned ? "Tài khoản đã bị khóa." : "Tài khoản đã được mở khóa.",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.6 Get Loyalty Points ──────────────────────────────────────────────────
+// GET /api/users/loyalty?page=1&limit=10
+// TODO: Bỏ comment khi đã tạo LoyaltyTransaction model
+exports.getLoyaltyPoints = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip  = (page - 1) * limit;
+
+    const user = await User.findOne({ _id: userId, deletedAt: null }).select("loyaltyPoints");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+    }
+
+    const [transactions, total] = await Promise.all([
+      LoyaltyTransaction.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      LoyaltyTransaction.countDocuments({ userId }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        currentPoints: user.loyaltyPoints ?? 0,
+        transactions,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 0,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.7 Redeem Points ───────────────────────────────────────────────────────
+// POST /api/users/loyalty/redeem
+// Dùng MongoDB transaction để đảm bảo atomic; idempotencyKey ngăn double-redeem
+// TODO: Bỏ comment LoyaltyTransaction khi đã tạo model
+exports.redeemPoints = async (req, res, next) => {
+  const { points, idempotencyKey } = req.body;
+
+  // Guard thủ công — Joi middleware chưa được mount nên validate tại đây
+  if (!Number.isInteger(points) || points <= 0) {
+    return res.status(400).json({ success: false, message: "Số điểm phải là số nguyên dương." });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const userId = req.user.id;
+
+    // Kiểm tra idempotency — tránh double-redeem do client retry
+    const existing = await LoyaltyTransaction.findOne({ idempotencyKey }).session(session);
+    if (existing) {
+      await session.abortTransaction();
+      return res.status(200).json({
+        success: true,
+        message: "Giao dịch đã được xử lý trước đó.",
+        data: { idempotencyKey },
+      });
+    }
+
+    // Lấy user và lock document trong transaction
+    const user = await User.findOne({ _id: userId, deletedAt: null }).session(session);
+    if (!user) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+    }
+
+    const currentPoints = user.loyaltyPoints ?? 0;
+    if (currentPoints < points) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: `Không đủ điểm. Hiện có: ${currentPoints}, yêu cầu: ${points}.`,
+      });
+    }
+
+    const newBalance = currentPoints - points;
+
+    // Trừ điểm
+    await User.updateOne(
+      { _id: userId },
+      { $inc: { loyaltyPoints: -points } },
+      { session }
+    );
+
+    // Ghi lịch sử giao dịch
+    await LoyaltyTransaction.create(
+      [{
+        userId,
+        type: "redeem",
+        points,
+        description: `Đổi ${points} điểm`,
+        balanceAfter: newBalance,
+        idempotencyKey,
+      }],
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    return res.status(200).json({
+      success: true,
+      message: `Đổi điểm thành công. Số điểm còn lại: ${newBalance}.`,
+      data: { pointsRedeemed: points, remainingPoints: newBalance },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    next(err);
+  } finally {
+    session.endSession();
+  }
+};
