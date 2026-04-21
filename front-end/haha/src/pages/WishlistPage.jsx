@@ -64,7 +64,7 @@ function WishlistCard({ product, onRemove, onAddToCart }) {
               onRemove(product);
             }}
             aria-label="Xoá khỏi yêu thích"
-            className="absolute right-3 bottom-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#e53e3e] opacity-0 shadow-sm transition-all duration-200 group-hover:opacity-100 hover:bg-white hover:scale-110"
+            className="absolute right-3 bottom-3 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/90 text-[#e53e3e] opacity-0 shadow-sm transition-all duration-200 group-hover:opacity-100 hover:scale-110 hover:bg-white active:scale-95"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -116,7 +116,7 @@ function WishlistCard({ product, onRemove, onAddToCart }) {
             whileTap={{ scale: 0.97 }}
             type="button"
             onClick={() => onAddToCart(product)}
-            className="rounded-full bg-[#1d1d1f] py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#3d3d3f]"
+            className="cursor-pointer rounded-full bg-[#1d1d1f] py-2.5 text-xs font-semibold text-white transition-all duration-200 hover:bg-[#3d3d3f] active:scale-95"
           >
             Thêm vào giỏ
           </motion.button>
@@ -124,7 +124,7 @@ function WishlistCard({ product, onRemove, onAddToCart }) {
             whileTap={{ scale: 0.97 }}
             type="button"
             onClick={() => onRemove(product)}
-            className="flex items-center justify-center gap-1 rounded-full border border-[#e53e3e] py-2.5 text-xs font-medium text-[#e53e3e] transition-all hover:bg-[#fff1f0]"
+            className="flex cursor-pointer items-center justify-center gap-1 rounded-full border border-[#e53e3e] py-2.5 text-xs font-medium text-[#e53e3e] transition-all duration-200 hover:bg-[#fff1f0] active:scale-95"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <polyline points="3 6 5 6 21 6" />
@@ -291,7 +291,7 @@ export default function WishlistPage() {
               whileTap={{ scale: 0.97 }}
               type="button"
               onClick={handleAddAllToCart}
-              className="flex items-center gap-2 rounded-full border border-[#1d1d1f] px-5 py-2.5 text-sm font-medium text-[#1d1d1f] transition-all hover:bg-[#1d1d1f] hover:text-white"
+              className="flex cursor-pointer items-center gap-2 rounded-full border border-[#1d1d1f] px-5 py-2.5 text-sm font-medium text-[#1d1d1f] transition-all duration-200 hover:bg-[#1d1d1f] hover:text-white active:scale-95"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="9" cy="21" r="1" />

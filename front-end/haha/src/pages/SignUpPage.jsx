@@ -255,7 +255,7 @@ export default function SignUpPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#1d1d1f] transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer text-[#8e8e93] transition-colors duration-150 hover:text-[#1d1d1f]"
                       tabIndex={-1}
                       aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                     >
@@ -316,7 +316,7 @@ export default function SignUpPage() {
                     <button
                       type="button"
                       onClick={() => setShowConfirm((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#1d1d1f] transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer text-[#8e8e93] transition-colors duration-150 hover:text-[#1d1d1f]"
                       tabIndex={-1}
                       aria-label={showConfirm ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                     >
@@ -351,7 +351,7 @@ export default function SignUpPage() {
                         className="sr-only"
                       />
                       <div
-                        className={`h-4 w-4 rounded flex items-center justify-center transition-all border ${
+                        className={`h-4 w-4 cursor-pointer rounded flex items-center justify-center transition-all duration-150 border ${
                           agreed
                             ? "bg-[#1d1d1f] border-[#1d1d1f]"
                             : errors.agreed

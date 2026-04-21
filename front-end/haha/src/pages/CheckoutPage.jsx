@@ -218,7 +218,7 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Điền sẵn email nếu đã đăng nhập
+  // Điền sẵn thông tin nếu đã đăng nhập
   useEffect(() => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -227,6 +227,7 @@ export default function CheckoutPage() {
           ...f,
           email: user.email,
           fullName: user.name || user.fullName || "",
+          phone: user.phone || user.phoneNumber || "",
         }));
     } catch {}
   }, []);

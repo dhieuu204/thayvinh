@@ -8,10 +8,11 @@ import Breadcrumb from "../components/Breadcrumb";
 import { ImageWithFallback } from "../components/ImageWithFallback";
 import { staggerContainer, staggerItem } from "../lib/animations";
 import { API_URL } from "../lib/api";
+import { AppleLogo } from "../components/icons";
 
 const SF_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif";
 
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 const CATEGORY_META = {
   iphone:      { emoji: "📱", name: "iPhone",      desc: "Dòng iPhone mới nhất với hiệu năng đỉnh cao và camera thế hệ mới." },
@@ -23,11 +24,14 @@ const CATEGORY_META = {
 };
 
 const SORT_OPTIONS = [
-  { value: "newest",      label: "Mới nhất" },
+  { value: "newest",      label: "Mới" },
   { value: "best_seller", label: "Bán chạy" },
-  { value: "price_asc",   label: "Giá tăng dần" },
-  { value: "price_desc",  label: "Giá giảm dần" },
+  { value: "featured",    label: "Nổi bật" },
+  { value: "discount",    label: "Giảm giá" },
+  { value: "price_asc",   label: "Giá thấp đến cao" },
+  { value: "price_desc",  label: "Giá cao đến thấp" },
 ];
+
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat("vi-VN", {
@@ -46,38 +50,33 @@ function ProductCard({ product }) {
   return (
     <motion.article
       variants={staggerItem}
-      className="group overflow-hidden rounded-2xl border border-black/[0.06] bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)]"
+      className="group overflow-hidden rounded-[16px] bg-white border border-black/[0.06] transition-all duration-300 hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] hover:-translate-y-1"
     >
       <Link to={`/products/${product._id}`} className="block">
-        <div className="relative flex h-[220px] items-center justify-center bg-[#f5f5f7] p-6">
+        <div className="relative flex h-[240px] items-center justify-center bg-[#f5f5f7] p-6">
           <ImageWithFallback
             src={image}
             alt={product.name}
-            className="max-h-[180px] w-auto object-contain transition-transform duration-500 group-hover:scale-105"
+            className="max-h-[190px] w-auto object-contain transition-transform duration-500 group-hover:scale-105"
           />
           {product.isFlashSale && (
-            <span className="absolute left-3 top-3 rounded-full bg-[#e53e3e] px-2.5 py-1 text-xs font-medium text-white">
+            <span className="absolute left-3 top-3 rounded-full bg-[#e53e3e] px-2.5 py-1 text-[10px] font-bold uppercase text-white">
               Flash Sale
-            </span>
-          )}
-          {discount && (
-            <span className="absolute right-3 top-3 rounded-full bg-[#fff1f0] px-2 py-0.5 text-xs font-semibold text-[#e53e3e]">
-              -{discount}%
             </span>
           )}
         </div>
 
-        <div className="px-4 pb-5 pt-3 text-center">
-          <h3 className="text-[14px] font-medium text-[#1d1d1f]">{product.name}</h3>
-          <div className="mt-1.5 flex items-baseline justify-center gap-2">
-            <span className="text-[15px] font-bold text-[#1d1d1f]">{formatCurrency(price)}</span>
+        <div className="px-5 pb-6 pt-4 text-center bg-[#f5f5f7]">
+          <h3 className="line-clamp-2 min-h-[40px] text-[15px] font-medium text-[#1d1d1f]">{product.name}</h3>
+          <div className="mt-2 flex flex-col items-center justify-center gap-1.5">
+            <span className="text-[16px] font-bold text-[#1d1d1f]">{formatCurrency(price)}</span>
             {oldPrice && (
-              <span className="text-xs text-[#8e8e93] line-through">{formatCurrency(oldPrice)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] text-[#8e8e93] line-through">{formatCurrency(oldPrice)}</span>
+                {discount && <span className="text-[13px] text-[#e53e3e]">-{discount}%</span>}
+              </div>
             )}
           </div>
-          {oldPrice && (
-            <p className="mt-0.5 text-xs font-medium text-[#0071e3]">Online giá rẻ quá</p>
-          )}
         </div>
       </Link>
     </motion.article>
@@ -93,10 +92,10 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
           key={page}
           type="button"
           onClick={() => onPageChange(page)}
-          className={`h-10 min-w-10 rounded-full px-3 text-sm transition-all ${
+          className={`h-10 min-w-10 cursor-pointer rounded-lg px-3 text-sm transition-all duration-200 active:scale-95 ${
             page === currentPage
-              ? "bg-[#1d1d1f] text-white"
-              : "border border-black/[0.08] bg-white text-[#6e6e73] hover:border-black/[0.2] hover:text-[#1d1d1f]"
+              ? "bg-[#1d1d1f] text-white font-bold"
+              : "bg-white text-[#1d1d1f] border border-black/[0.08] hover:bg-[#f5f5f7]"
           }`}
         >
           {page}
@@ -117,6 +116,8 @@ export default function CategoryPage() {
   const [sortBy, setSortBy] = useState("newest");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [seriesFilters, setSeriesFilters] = useState([]);
+  const [activeFilter, setActiveFilter] = useState(null);
 
   useEffect(() => {
     if (!meta) navigate("/not-found", { replace: true });
@@ -125,7 +126,8 @@ export default function CategoryPage() {
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
-    fetch(`${API_URL}/api/products/filter/category?categorySlug=${slug}&page=${currentPage}&limit=${PAGE_SIZE}&sort=${sortBy}`)
+    const searchParam = activeFilter ? `&search=${encodeURIComponent(activeFilter)}` : "";
+    fetch(`${API_URL}/api/products/filter/category?categorySlug=${slug}&page=${currentPage}&limit=${PAGE_SIZE}&sort=${sortBy}${searchParam}`)
       .then((r) => r.json())
       .then((json) => {
         setProducts(json.data?.products || []);
@@ -134,9 +136,24 @@ export default function CategoryPage() {
       })
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
-  }, [slug, sortBy, currentPage]);
+  }, [slug, sortBy, currentPage, activeFilter]);
 
   useEffect(() => setCurrentPage(1), [sortBy]);
+  useEffect(() => { setCurrentPage(1); setActiveFilter(null); }, [slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`${API_URL}/api/products/filter/category?categorySlug=${slug}&limit=100&sort=newest`)
+      .then((r) => r.json())
+      .then((json) => {
+        const names = (json.data?.products || []).map((p) => p.name);
+        const keywords = [...new Set(
+          names.map((n) => n.split(" ").slice(0, 2).join(" "))
+        )].slice(0, 8);
+        setSeriesFilters(keywords);
+      })
+      .catch(() => {});
+  }, [slug]);
 
   if (!meta) return null;
 
@@ -146,59 +163,93 @@ export default function CategoryPage() {
       style={{ fontFamily: SF_FONT }}
     >
       <Header />
-      <Breadcrumb
-        items={[
-          { label: "Trang chủ", to: "/" },
-          { label: "Sản phẩm", to: "/products" },
-          { label: meta.name },
-        ]}
-      />
+      
+      {/* <div className="bg-[#fafafa]">
+        <div className="max-w-[1200px] mx-auto text-[#1d1d1f]">
+          <Breadcrumb
+            items={[
+              { label: "Trang chủ", to: "/" },
+              { label: "Sản phẩm", to: "/products" },
+              { label: meta.name },
+            ]}
+          />
+        </div>
+      </div> */}
 
-      <main className="pb-16">
-        {/* Category hero */}
-        <section className="border-b border-black/[0.06] bg-white py-8">
-          <div className="mx-auto max-w-[1200px] px-6 md:px-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-4"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f5f5f7] text-3xl">
-                {meta.emoji}
-              </div>
-              <div>
-                <h1 style={{ fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 650 }}>
-                  {meta.name}
-                </h1>
-                <p className="mt-0.5 max-w-lg text-sm text-[#6e6e73]">{meta.desc}</p>
-              </div>
-              <span className="ml-auto rounded-full bg-[#f5f5f7] px-3 py-1.5 text-sm font-medium text-[#6e6e73]">
-                {totalProducts} sản phẩm
-              </span>
-            </motion.div>
+      <main className="pb-20">
+        <section className="mx-auto max-w-[1200px] px-4 md:px-8">
+          {/* Category Logo & Title
+          <div className="flex justify-center items-center gap-2 mb-8 text-[#1d1d1f]">
+            <div className="flex-shrink-0 flex items-center justify-center pb-1">
+              <AppleLogo size={32} />
+            </div>
+            <h1 className="text-[32px] font-semibold tracking-tight leading-none">{meta.name}</h1>
+          </div> */}
+
+          {/* Banner Slider Mockup */}
+          <div className="relative w-full rounded-2xl overflow-hidden mb-8 group cursor-pointer bg-white border border-black/[0.04]">
+            <img 
+              src="https://shopdunk.com/images/uploaded/banner-thang-4/homepage/banner%20iP17promax_PC.png" 
+              alt="Category Banner" 
+              className="w-full h-auto block"
+            />
+            {/* Arrows */}
+            <div className="absolute top-1/2 left-4 -translate-y-1/2 w-10 h-10 bg-white/80 text-[#1d1d1f] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-black/10 shadow-sm">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+            </div>
+            <div className="absolute top-1/2 right-4 -translate-y-1/2 w-10 h-10 bg-white/80 text-[#1d1d1f] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-black/10 shadow-sm">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+            </div>
           </div>
-        </section>
 
-        <section className="mx-auto mt-6 max-w-[1200px] px-4 md:px-8">
-          {/* Sort toolbar */}
-          <div className="mb-6 flex flex-wrap items-center gap-3 overflow-hidden rounded-2xl border border-black/[0.06] bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-            <span className="text-sm text-[#6e6e73]">Sắp xếp:</span>
-            <div className="flex flex-wrap gap-1">
-              {SORT_OPTIONS.map((opt) => (
+          {/* Filter Bar */}
+          {seriesFilters.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <button
+                type="button"
+                onClick={() => { setActiveFilter(null); setCurrentPage(1); }}
+                className={`px-4 py-2 rounded-lg border text-[14px] font-medium transition-colors ${
+                  !activeFilter
+                    ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+                    : "bg-white text-[#1d1d1f] border-black/[0.08] hover:bg-[#f5f5f7]"
+                }`}
+              >
+                Tất cả
+              </button>
+              {seriesFilters.map((kw) => (
                 <button
-                  key={opt.value}
+                  key={kw}
+                  type="button"
+                  onClick={() => { setActiveFilter(kw); setCurrentPage(1); }}
+                  className={`px-4 py-2 rounded-lg border text-[14px] font-medium transition-colors ${
+                    activeFilter === kw
+                      ? "bg-[#1d1d1f] text-white border-[#1d1d1f]"
+                      : "bg-white text-[#1d1d1f] border-black/[0.06] hover:bg-[#f5f5f7]"
+                  }`}
+                >
+                  {kw}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Sort Info Text */}
+          <div className="flex flex-wrap items-center gap-4 mb-8 text-[14px]">
+            <span className="text-[#6e6e73]">Sắp xếp theo:</span>
+            {SORT_OPTIONS.map((opt, idx) => (
+              <div key={opt.value} className="flex items-center gap-4">
+                <button
                   type="button"
                   onClick={() => setSortBy(opt.value)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
-                    sortBy === opt.value
-                      ? "bg-[#1d1d1f] text-white"
-                      : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
+                  className={`transition-colors font-medium ${
+                    sortBy === opt.value ? "text-[#1d1d1f]" : "text-[#8e8e93] hover:text-[#1d1d1f]"
                   }`}
                 >
                   {opt.label}
                 </button>
-              ))}
-            </div>
+                {idx < SORT_OPTIONS.length - 1 && <span className="text-[#d2d2d7]">•</span>}
+              </div>
+            ))}
           </div>
 
           {/* Grid */}
@@ -210,7 +261,7 @@ export default function CategoryPage() {
             <div className="rounded-2xl border border-dashed border-black/[0.15] bg-white py-20 text-center">
               <p className="text-lg font-medium text-[#1d1d1f]">Không có sản phẩm</p>
               <p className="mt-1 text-sm text-[#6e6e73]">Danh mục này chưa có sản phẩm nào.</p>
-              <Link to="/products" className="mt-5 inline-block rounded-full border border-[#1d1d1f] px-6 py-2.5 text-sm font-medium text-[#1d1d1f] hover:bg-[#1d1d1f] hover:text-white transition-all">
+              <Link to="/products" className="mt-5 inline-block cursor-pointer rounded-full border border-[#1d1d1f] bg-[#1d1d1f] px-6 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:opacity-90 active:scale-95">
                 Xem tất cả sản phẩm
               </Link>
             </div>
@@ -221,7 +272,7 @@ export default function CategoryPage() {
               initial="initial"
               animate="whileInView"
               viewport={{ once: true }}
-              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+              className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
             >
               {products.map((p) => (
                 <ProductCard key={p._id} product={p} />

@@ -15,10 +15,12 @@ import axiosClient from "../../lib/api";
 
 /* ─── Nav items ──────────────────────────────────────────────────── */
 const NAV_ITEMS = [
-  { label: "Trang chủ", to: "/" },
-  { label: "Sản phẩm", to: "/products" },
-  { label: "Về chúng tôi", to: "/about" },
-  { label: "Liên hệ", to: "/contact" },
+  { label: "iPhone", to: "/categories/iphone" },
+  { label: "iPad", to: "/categories/ipad" },
+  { label: "Mac", to: "/categories/mac" },
+  { label: "Watch", to: "/categories/watch" },
+  { label: "Audio", to: "/categories/audio" },
+  { label: "Accessories", to: "/categories/accessories" },
 ];
 
 /* ─── Shared state helpers ───────────────────────────────────────── */

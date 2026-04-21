@@ -145,7 +145,7 @@ exports.search = async (req, res, next) => {
 // Public — tìm theo categoryId hoặc categorySlug
 exports.filterByCategory = async (req, res, next) => {
   try {
-    const { categoryId, categorySlug, page = 1, limit = 20, sort } = req.query;
+    const { categoryId, categorySlug, page = 1, limit = 20, sort, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     let category;
@@ -170,6 +170,7 @@ exports.filterByCategory = async (req, res, next) => {
     const sortQuery = sortOptions[sort] || sortOptions.newest;
 
     const filter = { category: category._id, isActive: true, deletedAt: null };
+    if (search) filter.name = { $regex: search, $options: "i" };
 
     const [products, total] = await Promise.all([
       Product.find(filter).select("-__v").sort(sortQuery).skip(skip).limit(parseInt(limit)),
@@ -242,6 +243,37 @@ exports.filterByPrice = async (req, res, next) => {
         },
       },
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.6b Category Showcase ───────────────────────────────────────────────────
+// GET /api/products/category-showcase
+// Public — trả về top 6 sản phẩm bán chạy cho mỗi danh mục (iPhone, iPad, Mac)
+exports.getCategoryShowcase = async (req, res, next) => {
+  try {
+    const slugs = (req.query.slugs || "iphone,ipad,mac").split(",").map((s) => s.trim());
+
+    const categories = await Category.find({ slug: { $in: slugs } });
+
+    const result = await Promise.all(
+      categories.map(async (cat) => {
+        const products = await Product.find({
+          category: cat._id,
+          isActive: true,
+          deletedAt: null,
+        })
+          .select("name slug basePrice salePrice images isFlashSale flashSalePrice")
+          .sort({ sold: -1 })
+          .limit(6);
+        return { slug: cat.slug, name: cat.name, products };
+      })
+    );
+
+    result.sort((a, b) => slugs.indexOf(a.slug) - slugs.indexOf(b.slug));
+
+    return res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

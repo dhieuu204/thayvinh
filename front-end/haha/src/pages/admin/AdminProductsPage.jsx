@@ -7,9 +7,8 @@ function fmt(n) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n);
 }
 
-/* ── Modal thêm/sửa sản phẩm ── */
-function ProductModal({ product, categories, onClose, onSave }) {
-  const isEdit = !!product;
+/* ── Shared form fields logic ── */
+function useProductForm(product) {
   const [form, setForm] = useState({
     name: product?.name || "",
     description: product?.description || "",
@@ -35,10 +34,22 @@ function ProductModal({ product, categories, onClose, onSave }) {
     return e;
   };
 
+  return { form, handle, validate, saving, setSaving, errors, setErrors };
+}
+
+const inputCls = (err) =>
+  `w-full rounded-xl border bg-[#fafafa] px-4 py-2.5 text-[13px] text-[#1d1d1f] outline-none transition-all focus:bg-white focus:ring-2 ${
+    err ? "border-[#e53e3e] focus:ring-[#e53e3e]/20" : "border-black/[0.1] focus:border-[#0071e3] focus:ring-[#0071e3]/20"
+  }`;
+
+/* ── Slide-in Drawer: CHỈ dùng khi THÊM MỚI ── */
+function ProductDrawer({ categories, onClose, onSave }) {
+  const { form, handle, validate, saving, setSaving, errors } = useProductForm(null);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) { return; }
     setSaving(true);
     const payload = {
       name: form.name.trim(),
@@ -49,13 +60,8 @@ function ProductModal({ product, categories, onClose, onSave }) {
       images: form.imageUrl ? [{ url: form.imageUrl }] : [],
     };
     try {
-      if (isEdit) {
-        await axiosClient.put(`/api/products/${product._id}`, payload);
-        toast.success("Cập nhật sản phẩm thành công");
-      } else {
-        await axiosClient.post(`/api/products`, payload);
-        toast.success("Thêm sản phẩm thành công");
-      }
+      await axiosClient.post(`/api/products`, payload);
+      toast.success("Thêm sản phẩm thành công");
       onSave();
     } catch (err) {
       toast.error(err?.response?.data?.message || "Thao tác thất bại");
@@ -64,16 +70,127 @@ function ProductModal({ product, categories, onClose, onSave }) {
     }
   };
 
-  const inputCls = (err) =>
-    `w-full rounded-xl border bg-[#fafafa] px-4 py-2.5 text-[13px] text-[#1d1d1f] outline-none transition-all focus:bg-white focus:ring-2 ${
-      err ? "border-[#e53e3e] focus:ring-[#e53e3e]/20" : "border-black/[0.1] focus:border-[#0071e3] focus:ring-[#0071e3]/20"
-    }`;
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/20"
+        onClick={onClose}
+      />
+      {/* Drawer panel */}
+      <div className="animate-slide-in-right fixed right-0 top-0 z-50 flex h-screen w-full max-w-[480px] flex-col bg-white shadow-[-6px_0_40px_rgba(0,0,0,0.12)]">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-black/[0.06] px-6 py-4 shrink-0">
+          <h2 className="text-[16px] font-semibold text-[#1d1d1f]">Thêm sản phẩm mới</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-[#8e8e93] hover:bg-[#f5f5f7] transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Scrollable form body */}
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Tên sản phẩm *</label>
+              <input name="name" value={form.name} onChange={handle} placeholder="iPhone 17 Pro..." className={inputCls(errors.name)} />
+              {errors.name && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.name}</p>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VNĐ) *</label>
+                <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
+                {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
+                <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
+                {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Danh mục *</label>
+              <select name="category" value={form.category} onChange={handle} className={inputCls(errors.category)}>
+                <option value="">Chọn danh mục</option>
+                {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+              </select>
+              {errors.category && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.category}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">URL ảnh sản phẩm</label>
+              <input name="imageUrl" value={form.imageUrl} onChange={handle} placeholder="https://..." className={inputCls(false)} />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Mô tả</label>
+              <textarea name="description" value={form.description} onChange={handle} rows={4} placeholder="Mô tả ngắn..." className={`resize-none ${inputCls(false)}`} />
+            </div>
+          </div>
+
+          {/* Footer cố định */}
+          <div className="shrink-0 border-t border-black/[0.06] px-6 py-4 flex justify-end gap-3 bg-white">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-black/[0.1] px-5 py-2.5 text-sm text-[#3a3a3c] hover:bg-[#f5f5f7] transition-colors"
+            >
+              Huỷ
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-full bg-[#1d1d1f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#3d3d3f] disabled:opacity-60 transition-colors"
+            >
+              {saving ? "Đang lưu..." : "Thêm sản phẩm"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+
+/* ── Modal popup: CHỈ dùng khi SỬA ── */
+function ProductModal({ product, categories, onClose, onSave }) {
+  const { form, handle, validate, saving, setSaving, errors } = useProductForm(product);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { return; }
+    setSaving(true);
+    const payload = {
+      name: form.name.trim(),
+      description: form.description,
+      basePrice: Number(form.basePrice),
+      stock: Number(form.stock),
+      category: form.category,
+      images: form.imageUrl ? [{ url: form.imageUrl }] : [],
+    };
+    try {
+      await axiosClient.put(`/api/products/${product._id}`, payload);
+      toast.success("Cập nhật sản phẩm thành công");
+      onSave();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Thao tác thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
         <div className="flex items-center justify-between border-b border-black/[0.06] px-6 py-4">
-          <h2 className="text-[16px] font-semibold text-[#1d1d1f]">{isEdit ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}</h2>
+          <h2 className="text-[16px] font-semibold text-[#1d1d1f]">Chỉnh sửa sản phẩm</h2>
           <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full text-[#8e8e93] hover:bg-[#f5f5f7]">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -115,7 +232,7 @@ function ProductModal({ product, categories, onClose, onSave }) {
           <div className="flex justify-end gap-3 pt-1">
             <button type="button" onClick={onClose} className="rounded-full border border-black/[0.1] px-5 py-2.5 text-sm text-[#3a3a3c] hover:bg-[#f5f5f7] transition-colors">Huỷ</button>
             <button type="submit" disabled={saving} className="rounded-full bg-[#1d1d1f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#3d3d3f] disabled:opacity-60 transition-colors">
-              {saving ? "Đang lưu..." : isEdit ? "Lưu thay đổi" : "Thêm sản phẩm"}
+              {saving ? "Đang lưu..." : "Lưu thay đổi"}
             </button>
           </div>
         </form>
@@ -168,9 +285,19 @@ export default function AdminProductsPage() {
 
   return (
     <div className="space-y-5">
-      {modal !== null && (
+      {/* Drawer — chỉ mở khi thêm mới */}
+      {modal === "add" && (
+        <ProductDrawer
+          categories={categories}
+          onClose={() => setModal(null)}
+          onSave={handleSave}
+        />
+      )}
+
+      {/* Modal popup — chỉ mở khi sửa */}
+      {modal !== null && modal !== "add" && (
         <ProductModal
-          product={modal === "add" ? null : modal}
+          product={modal}
           categories={categories}
           onClose={() => setModal(null)}
           onSave={handleSave}

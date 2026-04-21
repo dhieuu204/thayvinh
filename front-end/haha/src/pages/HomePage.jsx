@@ -1,10 +1,11 @@
-﻿import Header from "../components/Header";
+import Header from "../components/Header";
 import Banner from "../components/Banner";
+import FlashSale from "../components/FlashSale";
 import NewArrival from "../components/NewArrival";
 import Categories from "../components/Categories";
 import Services from "../components/Services";
+import CategoryShowcase from "../components/CategoryShowcase";
 import ExploreProducts from "../components/ExploreProducts";
-import FlashSale from "../components/FlashSale";
 import Footer from "../components/Footer";
 
 const HomePage = () => {
@@ -18,11 +19,12 @@ const HomePage = () => {
     >
       <Header />
       <Banner />
-      <NewArrival />
-      <Categories />
-      <Services />
-      <ExploreProducts />
       <FlashSale />
+      <Categories />
+      <NewArrival />
+      <CategoryShowcase />
+      <ExploreProducts />
+      <Services />
       <Footer />
     </div>
   );

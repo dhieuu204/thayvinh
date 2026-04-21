@@ -282,7 +282,7 @@ export default function ProductDetailPage() {
                 <button
                   type="button"
                   onClick={() => setPromoOpen((v) => !v)}
-                  className="flex w-full items-center justify-between px-4 py-3.5"
+                  className="flex w-full cursor-pointer items-center justify-between px-4 py-3.5 transition-colors hover:bg-[#fffbeb] active:bg-[#fef3c7]"
                 >
                   <div className="flex items-center gap-2">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
@@ -326,12 +326,12 @@ export default function ProductDetailPage() {
                 <span className="text-sm font-medium text-[#1d1d1f]">Số lượng:</span>
                 <div className="flex items-center rounded-xl border border-black/[0.1] bg-white">
                   <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1}
-                    className="flex h-9 w-9 items-center justify-center text-[#1d1d1f] transition-colors hover:text-[#0071e3] disabled:opacity-30">
+                    className="flex h-9 w-9 cursor-pointer items-center justify-center text-[#1d1d1f] transition-colors duration-150 hover:text-[#0071e3] active:scale-90 disabled:cursor-not-allowed disabled:opacity-40">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </button>
                   <span className="min-w-[32px] text-center text-sm font-semibold text-[#1d1d1f]">{qty}</span>
                   <button type="button" onClick={() => setQty((q) => q + 1)}
-                    className="flex h-9 w-9 items-center justify-center text-[#1d1d1f] transition-colors hover:text-[#0071e3]">
+                    className="flex h-9 w-9 cursor-pointer items-center justify-center text-[#1d1d1f] transition-colors duration-150 hover:text-[#0071e3] active:scale-90">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </button>
                 </div>
@@ -341,17 +341,17 @@ export default function ProductDetailPage() {
               <div className="flex flex-col gap-3">
                 <motion.button type="button" whileTap={{ scale: 0.985 }} onClick={handleBuyNow}
                   disabled={product.stock === 0}
-                  className="w-full rounded-full bg-[#1d1d1f] py-4 text-[15px] font-semibold text-white transition-all hover:bg-[#3d3d3f] disabled:opacity-50">
+                  className="w-full cursor-pointer rounded-full bg-[#1d1d1f] py-4 text-[15px] font-semibold text-white transition-all duration-200 hover:bg-[#3d3d3f] disabled:cursor-not-allowed disabled:opacity-50">
                   MUA NGAY
                 </motion.button>
                 <div className="grid grid-cols-2 gap-3">
                   <motion.button type="button" whileTap={{ scale: 0.985 }} onClick={handleAddToCart}
                     disabled={product.stock === 0}
-                    className="rounded-full border border-[#1d1d1f] py-3 text-sm font-medium text-[#1d1d1f] transition-all hover:bg-[#1d1d1f] hover:text-white disabled:opacity-50">
+                    className="cursor-pointer rounded-full border border-[#1d1d1f] py-3 text-sm font-medium text-[#1d1d1f] transition-all duration-200 hover:bg-[#1d1d1f] hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
                     Thêm vào giỏ
                   </motion.button>
                   <motion.button type="button" whileTap={{ scale: 0.985 }} onClick={handleToggleWishlist}
-                    className={`flex items-center justify-center gap-1.5 rounded-full border py-3 text-sm font-medium transition-all ${
+                    className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-full border py-3 text-sm font-medium transition-all duration-200 ${
                       wishlisted ? "border-[#e53e3e] bg-[#fff1f0] text-[#e53e3e]" : "border-black/[0.1] text-[#1d1d1f] hover:border-[#e53e3e] hover:text-[#e53e3e]"
                     }`}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill={wishlisted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
@@ -389,7 +389,7 @@ export default function ProductDetailPage() {
                     key={star}
                     type="button"
                     onClick={() => setReviewForm((f) => ({ ...f, rating: star }))}
-                    className={`text-2xl transition-colors ${star <= reviewForm.rating ? "text-[#f59e0b]" : "text-[#d1d5db]"}`}
+                    className={`cursor-pointer text-2xl transition-all duration-150 hover:scale-110 active:scale-95 ${star <= reviewForm.rating ? "text-[#f59e0b]" : "text-[#d1d5db] hover:text-[#fbbf24]"}`}
                   >
                     ★
                   </button>
@@ -406,7 +406,7 @@ export default function ProductDetailPage() {
                 <button
                   type="submit"
                   disabled={submittingReview}
-                  className="rounded-full bg-[#1d1d1f] px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#3d3d3f] disabled:opacity-60"
+                  className="cursor-pointer rounded-full bg-[#1d1d1f] px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#3d3d3f] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submittingReview ? "Đang gửi..." : "Gửi đánh giá"}
                 </button>

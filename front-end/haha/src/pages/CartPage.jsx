@@ -80,7 +80,7 @@ function CartItem({ item, onQtyChange, onRemove }) {
             type="button"
             onClick={() => onRemove(item)}
             aria-label="Xoá sản phẩm"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#8e8e93] transition-colors hover:bg-[#f5f5f7] hover:text-[#e53e3e]"
+            className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-[#8e8e93] transition-all duration-150 hover:bg-[#f5f5f7] hover:text-[#e53e3e] active:scale-90"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <polyline points="3 6 5 6 21 6" />
@@ -103,7 +103,7 @@ function CartItem({ item, onQtyChange, onRemove }) {
               type="button"
               onClick={() => onQtyChange(item, Math.max(1, item.quantity - 1))}
               disabled={item.quantity <= 1}
-              className="flex h-8 w-8 items-center justify-center text-[#1d1d1f] transition-colors hover:text-[#0071e3] disabled:opacity-30"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center text-[#1d1d1f] transition-colors duration-150 hover:text-[#0071e3] active:scale-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /></svg>
             </button>
@@ -113,7 +113,7 @@ function CartItem({ item, onQtyChange, onRemove }) {
             <button
               type="button"
               onClick={() => onQtyChange(item, item.quantity + 1)}
-              className="flex h-8 w-8 items-center justify-center text-[#1d1d1f] transition-colors hover:text-[#0071e3]"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center text-[#1d1d1f] transition-colors duration-150 hover:text-[#0071e3] active:scale-90"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
             </button>
@@ -182,7 +182,7 @@ function OrderSummary({ items, onCheckout }) {
           whileTap={{ scale: 0.985 }}
           type="button"
           onClick={onCheckout}
-          className="mt-5 w-full rounded-full bg-[#1d1d1f] py-3.5 text-[15px] font-semibold text-white transition-all hover:bg-[#3d3d3f]"
+          className="mt-5 w-full cursor-pointer rounded-full bg-[#1d1d1f] py-3.5 text-[15px] font-semibold text-white transition-all duration-200 hover:bg-[#3d3d3f] active:scale-95"
         >
           Tiến hành thanh toán
         </motion.button>

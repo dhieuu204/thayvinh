@@ -9,6 +9,7 @@ const guard = [authenticate, authorizeAdmin];
 router.get("/",                       ProductController.getAll);
 router.get("/search",                 ProductController.search);
 router.get("/flash-sales",            ProductController.getFlashSales);
+router.get("/category-showcase",      ProductController.getCategoryShowcase);
 router.get("/filter/category",        ProductController.filterByCategory);
 router.get("/filter/price",           ProductController.filterByPrice);
 router.get("/:id",                    ProductController.getById);

@@ -85,7 +85,7 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
           key={page}
           type="button"
           onClick={() => onPageChange(page)}
-          className={`h-10 min-w-10 rounded-full px-3 text-sm transition-all ${
+          className={`h-10 min-w-10 cursor-pointer rounded-full px-3 text-sm transition-all duration-200 active:scale-95 ${
             page === currentPage
               ? "bg-[#1d1d1f] text-white"
               : "bg-white text-[#6e6e73] border border-black/[0.08] hover:border-black/[0.2] hover:text-[#1d1d1f]"
@@ -197,7 +197,7 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={() => handleCategoryChange("all")}
-                className={`shrink-0 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                className={`shrink-0 cursor-pointer rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-200 active:scale-95 ${
                   selectedCategory === "all"
                     ? "bg-[#1d1d1f] text-white"
                     : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
@@ -210,7 +210,7 @@ export default function ProductsPage() {
                   key={cat._id}
                   type="button"
                   onClick={() => handleCategoryChange(cat.slug)}
-                  className={`shrink-0 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                  className={`shrink-0 cursor-pointer rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-200 active:scale-95 ${
                     selectedCategory === cat.slug
                       ? "bg-[#1d1d1f] text-white"
                       : "bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]"
@@ -230,7 +230,7 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => handleSortChange(option.value)}
-                    className={`transition-colors ${
+                    className={`cursor-pointer transition-all duration-150 active:scale-95 ${
                       sortBy === option.value
                         ? "font-semibold text-[#1d1d1f]"
                         : "text-[#6e6e73] hover:text-[#1d1d1f]"
@@ -266,7 +266,7 @@ export default function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => { setPriceMin(""); setPriceMax(""); setCurrentPage(1); }}
-                  className="rounded-lg border border-black/[0.1] px-3 py-1.5 text-[12px] text-[#6e6e73] hover:text-[#1d1d1f] transition-colors"
+                  className="cursor-pointer rounded-lg border border-black/[0.1] px-3 py-1.5 text-[12px] text-[#6e6e73] transition-all duration-150 hover:text-[#1d1d1f] active:scale-95"
                 >
                   Xóa bộ lọc giá
                 </button>
@@ -288,7 +288,7 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="mt-5 rounded-full border border-[#1d1d1f] px-5 py-2.5 text-sm text-[#1d1d1f] transition-colors hover:bg-[#1d1d1f] hover:text-white"
+                className="mt-5 cursor-pointer rounded-full border border-[#1d1d1f] px-5 py-2.5 text-sm text-[#1d1d1f] transition-all duration-200 hover:bg-[#1d1d1f] hover:text-white active:scale-95"
               >
                 Reset bộ lọc
               </button>

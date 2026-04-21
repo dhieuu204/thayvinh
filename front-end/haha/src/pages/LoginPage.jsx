@@ -175,7 +175,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#1d1d1f] transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer text-[#8e8e93] transition-colors duration-150 hover:text-[#1d1d1f]"
                       tabIndex={-1}
                       aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                     >

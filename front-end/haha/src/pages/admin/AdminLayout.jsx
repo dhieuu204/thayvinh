@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import axiosClient from "../../lib/api";
 
@@ -87,9 +87,22 @@ const NAV = [
   },
 ];
 
+const PAGE_TITLES = {
+  "/admin":            "Tổng quan",
+  "/admin/orders":     "Quản lý đơn hàng",
+  "/admin/users":      "Quản lý người dùng",
+  "/admin/products":   "Quản lý sản phẩm",
+  "/admin/reviews":    "Quản lý đánh giá",
+  "/admin/categories": "Quản lý danh mục",
+  "/admin/vouchers":   "Quản lý Voucher",
+  "/admin/returns":    "Quản lý hoàn hàng",
+};
+
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pageTitle = PAGE_TITLES[location.pathname] ?? "Admin";
 
   const user = (() => {
     try { return JSON.parse(localStorage.getItem("user") || "{}"); } catch { return {}; }
@@ -195,16 +208,19 @@ export default function AdminLayout() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top bar */}
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-black/[0.06] bg-white px-5 py-3.5 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] lg:hidden"
-            onClick={() => setSidebarOpen((v) => !v)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <Link to="/" className="ml-auto flex items-center gap-1 text-xs text-[#6e6e73] hover:text-[#0071e3] transition-colors">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] lg:hidden"
+              onClick={() => setSidebarOpen((v) => !v)}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <span className="text-[14px] font-semibold text-[#1d1d1f]">{pageTitle}</span>
+          </div>
+          <Link to="/" className="flex items-center gap-1 text-xs text-[#6e6e73] hover:text-[#0071e3] transition-colors">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>

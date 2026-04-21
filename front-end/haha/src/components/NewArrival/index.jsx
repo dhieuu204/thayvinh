@@ -25,7 +25,7 @@ export default function NewArrival() {
   if (products.length === 0) return null;
 
   return (
-    <section className="w-full bg-[#fafafa] py-16">
+    <section className="w-full bg-[#fafafa] py-8 pt-10">
       <div className="max-w-[1200px] mx-auto px-8 flex flex-col items-center gap-4">
         <motion.div
           className="text-center"
@@ -40,16 +40,16 @@ export default function NewArrival() {
           >
             Sản phẩm mới nhất
           </h2>
-          <p
+          {/* <p
             className="text-[#6e6e73]"
             style={{ fontSize: "13px", lineHeight: 1.6 }}
           >
             Khám phá những sản phẩm Apple mới nhất vừa ra mắt.
-          </p>
+          </p> */}
         </motion.div>
 
         <motion.div
-          className="w-full grid grid-cols-3 gap-5"
+          className="w-full grid grid-cols-3 gap-5 pt-5"
           variants={staggerContainer}
           initial="initial"
           whileInView="whileInView"
@@ -96,13 +96,13 @@ export default function NewArrival() {
           })}
         </motion.div>
 
-        <Link
+        {/* <Link
           to="/products"
           className="bg-[#1d1d1f] text-white px-5 py-2 rounded-full hover:bg-[#3d3d3f] transition-colors duration-200 border border-transparent cursor-pointer"
           style={{ fontSize: "12px", fontWeight: 400 }}
         >
           Xem tất cả
-        </Link>
+        </Link> */}
       </div>
     </section>
   );
