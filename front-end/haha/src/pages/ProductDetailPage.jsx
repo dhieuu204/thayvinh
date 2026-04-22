@@ -85,8 +85,11 @@ export default function ProductDetailPage() {
   const [wishlisted, setWishlisted] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [avgRating, setAvgRating] = useState(0);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+  const [reviewForm, setReviewForm] = useState({ orderId: "", rating: 5, comment: "", images: [] });
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [userOrders, setUserOrders] = useState([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -106,6 +109,34 @@ export default function ProductDetailPage() {
       })
       .catch(() => setProduct(null))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  // Get current user ID from token
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setCurrentUserId(payload.id);
+    } catch (err) {}
+  }, []);
+
+  // Fetch user's delivered orders for review selection
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token || !id) return;
+    fetch(`${API_URL}/api/orders/my?status=Delivered`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        const orders = json.data?.orders || [];
+        const relevantOrders = orders.filter((o) =>
+          o.products?.some((p) => p.product === id || p.product?._id === id)
+        );
+        setUserOrders(relevantOrders);
+      })
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -146,23 +177,78 @@ export default function ProductDetailPage() {
     toast[added ? "success" : "info"](added ? "Đã thêm vào yêu thích!" : "Đã xoá khỏi yêu thích");
   };
 
+  const handleImageUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) { toast.error("Vui lòng đăng nhập"); return; }
+
+    setUploadingImage(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("image", file);
+
+        const res = await fetch(`${API_URL}/api/images`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message);
+
+        setReviewForm((f) => ({ ...f, images: [...f.images, json.data.url] }));
+      }
+      toast.success("Đã upload ảnh thành công!");
+    } catch (err) {
+      toast.error(err.message || "Lỗi upload ảnh");
+    } finally {
+      setUploadingImage(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoveImage = (index) => {
+    setReviewForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== index) }));
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!confirm("Bạn có chắc muốn xoá đánh giá này?")) return;
+    const token = localStorage.getItem("token");
+    if (!token) { toast.error("Vui lòng đăng nhập"); return; }
+    try {
+      const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message);
+      setReviews((prev) => prev.filter((r) => r._id !== reviewId));
+      toast.success("Đánh giá đã được xoá!");
+    } catch (err) {
+      toast.error(err.message || "Không thể xoá đánh giá");
+    }
+  };
+
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
     if (!token) { toast.error("Vui lòng đăng nhập để đánh giá"); return; }
+    if (!reviewForm.orderId) { toast.error("Vui lòng chọn đơn hàng đã mua"); return; }
     if (!reviewForm.comment.trim()) { toast.error("Vui lòng nhập nội dung đánh giá"); return; }
     setSubmittingReview(true);
     try {
       const res = await fetch(`${API_URL}/api/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ productId: id, rating: reviewForm.rating, comment: reviewForm.comment }),
+        body: JSON.stringify({ productId: id, orderId: reviewForm.orderId, rating: reviewForm.rating, comment: reviewForm.comment, images: reviewForm.images }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message);
       setReviews((prev) => [json.data, ...prev]);
       setAvgRating((prev) => prev ? ((prev * reviews.length + reviewForm.rating) / (reviews.length + 1)) : reviewForm.rating);
-      setReviewForm({ rating: 5, comment: "" });
+      setReviewForm({ orderId: "", rating: 5, comment: "", images: [] });
       toast.success("Đánh giá của bạn đã được gửi!");
     } catch (err) {
       toast.error(err.message || "Không thể gửi đánh giá");
@@ -382,6 +468,27 @@ export default function ProductDetailPage() {
             {/* Review form */}
             <form onSubmit={handleSubmitReview} className="mb-8 rounded-2xl border border-black/[0.06] bg-white p-5">
               <p className="mb-3 text-[14px] font-semibold text-[#1d1d1f]">Viết đánh giá của bạn</p>
+              {userOrders.length > 0 ? (
+                <div className="mb-4">
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Chọn đơn hàng *</label>
+                  <select
+                    value={reviewForm.orderId}
+                    onChange={(e) => setReviewForm((f) => ({ ...f, orderId: e.target.value }))}
+                    className="w-full rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-2.5 text-[13px] text-[#1d1d1f] outline-none transition-all focus:border-[#0071e3] focus:bg-white focus:ring-2 focus:ring-[#0071e3]/20"
+                  >
+                    <option value="">-- Chọn đơn hàng --</option>
+                    {userOrders.map((order) => (
+                      <option key={order._id} value={order._id}>
+                        Đơn hàng {order.orderNumber || order._id.slice(-6)} - {new Date(order.createdAt).toLocaleDateString("vi-VN")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="mb-4 rounded-lg bg-[#fff3cd] p-3 text-[13px] text-[#856404]">
+                  Bạn cần mua sản phẩm này và nhận hàng để có thể đánh giá.
+                </div>
+              )}
               <div className="mb-3 flex items-center gap-2">
                 <span className="text-sm text-[#6e6e73]">Đánh giá:</span>
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -402,6 +509,55 @@ export default function ProductDetailPage() {
                 placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm..."
                 className="w-full resize-none rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-3 text-[14px] text-[#1d1d1f] outline-none transition-all placeholder-[#8e8e93] focus:border-[#0071e3] focus:bg-white focus:ring-2 focus:ring-[#0071e3]/20"
               />
+
+              {/* Image upload */}
+              <div className="mt-3">
+                <label className="mb-2 block text-[12px] font-medium text-[#1d1d1f]">Thêm ảnh/video (tùy chọn)</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="hidden"
+                    id="review-images"
+                  />
+                  <label
+                    htmlFor="review-images"
+                    className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/[0.1] bg-[#fafafa] px-4 py-3 text-[13px] text-[#6e6e73] transition-all hover:border-[#0071e3] hover:bg-[#eff6ff]"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    {uploadingImage ? "Đang upload..." : "Click để chọn ảnh/video"}
+                  </label>
+                </div>
+              </div>
+
+              {/* Display uploaded images */}
+              {reviewForm.images.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-2 text-[12px] font-medium text-[#1d1d1f]">Ảnh đã upload ({reviewForm.images.length})</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {reviewForm.images.map((img, idx) => (
+                      <div key={idx} className="group relative aspect-square overflow-hidden rounded-lg bg-[#f5f5f7]">
+                        <img src={img} alt={`preview-${idx}`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/50 group-hover:opacity-100"
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-3 flex justify-end">
                 <button
                   type="submit"
@@ -420,12 +576,12 @@ export default function ProductDetailPage() {
               <div className="space-y-4">
                 {reviews.map((r) => (
                   <div key={r._id} className="rounded-2xl border border-black/[0.06] bg-white p-4">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1d1d1f] text-xs font-bold text-white">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1d1d1f] text-xs font-bold text-white shrink-0">
                           {(r.userId?.fullName || r.userId?.username || "U")[0].toUpperCase()}
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="text-[13px] font-medium text-[#1d1d1f]">
                             {r.userId?.fullName || r.userId?.username || "Người dùng"}
                           </p>
@@ -434,11 +590,45 @@ export default function ProductDetailPage() {
                           </p>
                         </div>
                       </div>
-                      <span className="text-sm font-semibold text-[#f59e0b]">
-                        {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-semibold text-[#f59e0b]">
+                          {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}
+                        </span>
+                        {currentUserId === r.userId?._id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReview(r._id)}
+                            className="flex h-6 w-6 items-center justify-center rounded-full text-[#8e8e93] hover:text-[#e53e3e] hover:bg-[#ffe0e0] transition-colors"
+                            title="Xoá đánh giá"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="text-sm text-[#3a3a3c]">{r.comment}</p>
+                    {r.images && r.images.length > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {r.images.map((img, idx) => (
+                          <a
+                            key={idx}
+                            href={img}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group relative aspect-square overflow-hidden rounded-lg bg-[#f5f5f7]"
+                          >
+                            <img src={img} alt={`review-${idx}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="2">
+                                <circle cx="12" cy="12" r="1"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+                              </svg>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {r.reply && (
                       <div className="mt-3 rounded-xl bg-[#f5f5f7] px-3 py-2">
                         <p className="text-xs font-semibold text-[#1d1d1f]">Phản hồi từ cửa hàng:</p>

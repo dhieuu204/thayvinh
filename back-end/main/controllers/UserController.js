@@ -70,18 +70,14 @@ exports.getUser = async (req, res, next) => {
 exports.updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { fullName, phone, address } = req.body;
+    const { fullName, phone, address, avatarUrl } = req.body;
 
     // Whitelist fields — không chấp nhận bất kỳ field nào khác
     const updateData = {};
     if (fullName !== undefined) updateData.fullName = sanitize(fullName);
     if (phone    !== undefined) updateData.phone    = sanitize(phone);
     if (address  !== undefined) updateData.address  = sanitize(address);
-
-    // Avatar từ Cloudinary (upload qua multer middleware)
-    if (req.file?.path) {
-      updateData.avatarUrl = req.file.path;
-    }
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ success: false, message: "Không có dữ liệu để cập nhật." });
@@ -236,23 +232,19 @@ exports.getLoyaltyPoints = async (req, res, next) => {
 // Dùng MongoDB transaction để đảm bảo atomic; idempotencyKey ngăn double-redeem
 // TODO: Bỏ comment LoyaltyTransaction khi đã tạo model
 exports.redeemPoints = async (req, res, next) => {
-  const { points, idempotencyKey } = req.body;
-
-  // Guard thủ công — Joi middleware chưa được mount nên validate tại đây
-  if (!Number.isInteger(points) || points <= 0) {
-    return res.status(400).json({ success: false, message: "Số điểm phải là số nguyên dương." });
-  }
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
+    const { points, idempotencyKey } = req.body;
+
+    // Guard thủ công — Joi middleware chưa được mount nên validate tại đây
+    if (!Number.isInteger(points) || points <= 0) {
+      return res.status(400).json({ success: false, message: "Số điểm phải là số nguyên dương." });
+    }
+
     const userId = req.user.id;
 
     // Kiểm tra idempotency — tránh double-redeem do client retry
-    const existing = await LoyaltyTransaction.findOne({ idempotencyKey }).session(session);
+    const existing = await LoyaltyTransaction.findOne({ idempotencyKey });
     if (existing) {
-      await session.abortTransaction();
       return res.status(200).json({
         success: true,
         message: "Giao dịch đã được xử lý trước đó.",
@@ -260,16 +252,14 @@ exports.redeemPoints = async (req, res, next) => {
       });
     }
 
-    // Lấy user và lock document trong transaction
-    const user = await User.findOne({ _id: userId, deletedAt: null }).session(session);
+    // Lấy user
+    const user = await User.findOne({ _id: userId, deletedAt: null });
     if (!user) {
-      await session.abortTransaction();
       return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
     }
 
     const currentPoints = user.loyaltyPoints ?? 0;
     if (currentPoints < points) {
-      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: `Không đủ điểm. Hiện có: ${currentPoints}, yêu cầu: ${points}.`,
@@ -281,24 +271,18 @@ exports.redeemPoints = async (req, res, next) => {
     // Trừ điểm
     await User.updateOne(
       { _id: userId },
-      { $inc: { loyaltyPoints: -points } },
-      { session }
+      { $inc: { loyaltyPoints: -points } }
     );
 
     // Ghi lịch sử giao dịch
-    await LoyaltyTransaction.create(
-      [{
-        userId,
-        type: "redeem",
-        points,
-        description: `Đổi ${points} điểm`,
-        balanceAfter: newBalance,
-        idempotencyKey,
-      }],
-      { session }
-    );
-
-    await session.commitTransaction();
+    await LoyaltyTransaction.create({
+      userId,
+      type: "redeem",
+      points,
+      description: `Đổi ${points} điểm`,
+      balanceAfter: newBalance,
+      idempotencyKey,
+    });
 
     return res.status(200).json({
       success: true,
@@ -306,9 +290,6 @@ exports.redeemPoints = async (req, res, next) => {
       data: { pointsRedeemed: points, remainingPoints: newBalance },
     });
   } catch (err) {
-    await session.abortTransaction();
     next(err);
-  } finally {
-    session.endSession();
   }
 };

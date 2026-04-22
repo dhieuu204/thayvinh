@@ -5,13 +5,11 @@ const categorySchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       maxlength: 100,
     },
     slug: {
       type: String,
-      unique: true,
       lowercase: true,
       trim: true,
     },
@@ -51,7 +49,15 @@ const categorySchema = new mongoose.Schema(
 );
 
 // ─── Indexes ──────────────────────────────────────────────────────────────────
-categorySchema.index({ slug: 1 });
+// Partial unique indexes — only enforce uniqueness for non-deleted documents
+categorySchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
+categorySchema.index(
+  { slug: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
 categorySchema.index({ parent: 1, isActive: 1 });
 categorySchema.index({ isActive: 1, deletedAt: 1, sortOrder: 1 });
 

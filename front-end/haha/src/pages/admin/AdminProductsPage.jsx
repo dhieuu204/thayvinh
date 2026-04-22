@@ -13,10 +13,13 @@ function useProductForm(product) {
     name: product?.name || "",
     description: product?.description || "",
     basePrice: product?.basePrice || "",
+    salePrice: product?.salePrice || "",
+    saleDiscount: product?.saleDiscount || "",
     stock: product?.stock || "",
     category: product?.category?._id || product?.category || "",
-    imageUrl: product?.images?.[0]?.url || "",
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(product?.images?.[0]?.url || null);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -25,16 +28,43 @@ function useProductForm(product) {
     setErrors((er) => ({ ...er, [e.target.name]: undefined }));
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = "Vui lòng nhập tên sản phẩm";
     if (!form.basePrice || Number(form.basePrice) <= 0) e.basePrice = "Giá phải lớn hơn 0";
+    if (form.salePrice && Number(form.salePrice) < Number(form.basePrice)) {
+      e.salePrice = "Giá bán không được nhỏ hơn giá gốc";
+    }
+    if (form.saleDiscount) {
+      const discountPercent = Number(form.saleDiscount);
+      if (discountPercent < 0 || discountPercent > 100) {
+        e.saleDiscount = "Giảm giá phải từ 0-100%";
+      } else {
+        const baseForDiscount = Number(form.salePrice || form.basePrice);
+        const finalPrice = baseForDiscount * (1 - discountPercent / 100);
+        if (finalPrice < Number(form.basePrice)) {
+          e.saleDiscount = `Giá sau giảm (${fmt(finalPrice)}) không được nhỏ hơn giá gốc (${fmt(form.basePrice)})`;
+        }
+      }
+    }
     if (!form.stock || Number(form.stock) < 0) e.stock = "Số lượng không hợp lệ";
     if (!form.category) e.category = "Chọn danh mục";
     return e;
   };
 
-  return { form, handle, validate, saving, setSaving, errors, setErrors };
+  return { form, handle, imageFile, setImageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors, setErrors };
 }
 
 const inputCls = (err) =>
@@ -44,27 +74,43 @@ const inputCls = (err) =>
 
 /* ── Slide-in Drawer: CHỈ dùng khi THÊM MỚI ── */
 function ProductDrawer({ categories, onClose, onSave }) {
-  const { form, handle, validate, saving, setSaving, errors } = useProductForm(null);
+  const { form, handle, imageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors } = useProductForm(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { return; }
     setSaving(true);
-    const payload = {
-      name: form.name.trim(),
-      description: form.description,
-      basePrice: Number(form.basePrice),
-      stock: Number(form.stock),
-      category: form.category,
-      images: form.imageUrl ? [{ url: form.imageUrl }] : [],
-    };
+
     try {
+      let imageUrl = null;
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
+        const uploadRes = await axiosClient.post("/api/images", formData);
+        imageUrl = uploadRes.data.data.url;
+      }
+
+      const payload = {
+        name: form.name.trim(),
+        description: form.description,
+        basePrice: Number(form.basePrice),
+        salePrice: form.salePrice ? Number(form.salePrice) : null,
+        saleDiscount: form.saleDiscount ? Number(form.saleDiscount) : null,
+        stock: Number(form.stock),
+        category: form.category,
+        images: imageUrl ? [{ url: imageUrl }] : [],
+      };
+
       await axiosClient.post(`/api/products`, payload);
       toast.success("Thêm sản phẩm thành công");
       onSave();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Thao tác thất bại");
+      console.error("[Upload Error] Full:", err);
+      console.error("[Upload Error] Response:", err?.response?.data);
+      console.error("[Upload Error] Status:", err?.response?.status);
+      const errorMsg = err?.response?.data?.message || err?.message || "Thao tác thất bại";
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -102,17 +148,35 @@ function ProductDrawer({ categories, onClose, onSave }) {
               {errors.name && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.name}</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VNĐ) *</label>
-                <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
-                {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VNĐ) *</label>
+              <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
+              {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá bán (VNĐ) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+              <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Để trống nếu không giảm giá" className={inputCls(errors.salePrice)} />
+              {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giảm giá (%) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+              <div className="flex gap-2">
+                <input name="saleDiscount" type="number" min="0" max="100" value={form.saleDiscount} onChange={handle} placeholder="0-100" className={inputCls(errors.saleDiscount)} />
               </div>
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
-                <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
-                {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
-              </div>
+              {form.saleDiscount && !errors.saleDiscount && (
+                <p className="mt-1.5 text-[11px] text-[#6e6e73]">
+                  Giá sau giảm: {fmt(Number(form.salePrice || form.basePrice) * (1 - Number(form.saleDiscount) / 100))}
+                </p>
+              )}
+              {errors.saleDiscount && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.saleDiscount}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
+              <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
+              {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
             </div>
 
             <div>
@@ -125,8 +189,18 @@ function ProductDrawer({ categories, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">URL ảnh sản phẩm</label>
-              <input name="imageUrl" value={form.imageUrl} onChange={handle} placeholder="https://..." className={inputCls(false)} />
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Ảnh sản phẩm</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="w-full rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-2.5 text-[13px] file:mr-3 file:border-0 file:bg-[#1d1d1f] file:px-3 file:py-1.5 file:text-white file:text-[11px] file:rounded file:cursor-pointer"
+              />
+              {imagePreview && (
+                <div className="mt-3 rounded-lg overflow-hidden border border-black/[0.1]">
+                  <img src={imagePreview} alt="Preview" className="w-full h-40 object-cover" />
+                </div>
+              )}
             </div>
 
             <div>
@@ -160,27 +234,43 @@ function ProductDrawer({ categories, onClose, onSave }) {
 
 /* ── Modal popup: CHỈ dùng khi SỬA ── */
 function ProductModal({ product, categories, onClose, onSave }) {
-  const { form, handle, validate, saving, setSaving, errors } = useProductForm(product);
+  const { form, handle, imageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors } = useProductForm(product);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { return; }
     setSaving(true);
-    const payload = {
-      name: form.name.trim(),
-      description: form.description,
-      basePrice: Number(form.basePrice),
-      stock: Number(form.stock),
-      category: form.category,
-      images: form.imageUrl ? [{ url: form.imageUrl }] : [],
-    };
+
     try {
+      let imageUrl = product?.images?.[0]?.url;
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
+        const uploadRes = await axiosClient.post("/api/images", formData);
+        imageUrl = uploadRes.data.data.url;
+      }
+
+      const payload = {
+        name: form.name.trim(),
+        description: form.description,
+        basePrice: Number(form.basePrice),
+        salePrice: form.salePrice ? Number(form.salePrice) : null,
+        saleDiscount: form.saleDiscount ? Number(form.saleDiscount) : null,
+        stock: Number(form.stock),
+        category: form.category,
+        images: imageUrl ? [{ url: imageUrl }] : [],
+      };
+
       await axiosClient.put(`/api/products/${product._id}`, payload);
       toast.success("Cập nhật sản phẩm thành công");
       onSave();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Thao tác thất bại");
+      console.error("[Upload Error] Full:", err);
+      console.error("[Upload Error] Response:", err?.response?.data);
+      console.error("[Upload Error] Status:", err?.response?.status);
+      const errorMsg = err?.response?.data?.message || err?.message || "Thao tác thất bại";
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -201,17 +291,33 @@ function ProductModal({ product, categories, onClose, onSave }) {
             <input name="name" value={form.name} onChange={handle} placeholder="iPhone 17 Pro..." className={inputCls(errors.name)} />
             {errors.name && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.name}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VND) *</label>
-              <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
-              {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
-              <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
-              {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
-            </div>
+          <div>
+            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VND) *</label>
+            <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
+            {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá bán (VND) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+            <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Để trống nếu không giảm giá" className={inputCls(errors.salePrice)} />
+            {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giảm giá (%) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+            <input name="saleDiscount" type="number" min="0" max="100" value={form.saleDiscount} onChange={handle} placeholder="0-100" className={inputCls(errors.saleDiscount)} />
+            {form.saleDiscount && !errors.saleDiscount && (
+              <p className="mt-1.5 text-[11px] text-[#6e6e73]">
+                Giá sau giảm: {fmt(Number(form.salePrice || form.basePrice) * (1 - Number(form.saleDiscount) / 100))}
+              </p>
+            )}
+            {errors.saleDiscount && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.saleDiscount}</p>}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
+            <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
+            {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
           </div>
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Danh mục *</label>
@@ -222,8 +328,18 @@ function ProductModal({ product, categories, onClose, onSave }) {
             {errors.category && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.category}</p>}
           </div>
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">URL ảnh sản phẩm</label>
-            <input name="imageUrl" value={form.imageUrl} onChange={handle} placeholder="https://..." className={inputCls(false)} />
+            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Ảnh sản phẩm</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="w-full rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-2.5 text-[13px] file:mr-3 file:border-0 file:bg-[#1d1d1f] file:px-3 file:py-1.5 file:text-white file:text-[11px] file:rounded file:cursor-pointer"
+            />
+            {imagePreview && (
+              <div className="mt-3 rounded-lg overflow-hidden border border-black/[0.1]">
+                <img src={imagePreview} alt="Preview" className="w-full h-40 object-cover" />
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Mô tả</label>

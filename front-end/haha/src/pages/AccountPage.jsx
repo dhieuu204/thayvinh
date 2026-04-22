@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
@@ -85,7 +85,10 @@ const inputCls = (err) =>
   }`;
 
 /* ─── Avatar ─────────────────────────────────────────────────────── */
-function Avatar({ name }) {
+function Avatar({ name, avatarUrl, onUpload }) {
+  const inputRef = React.useRef(null);
+  const [isUploading, setIsUploading] = React.useState(false);
+
   const initials = (name || "U")
     .split(" ")
     .map((w) => w[0])
@@ -93,9 +96,52 @@ function Avatar({ name }) {
     .join("")
     .toUpperCase();
 
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await axiosClient.post("/api/images", formData);
+      onUpload?.(res.data.data.url);
+    } catch (err) {
+      console.error("[Avatar Upload Error]", err);
+      const errorMsg = err?.response?.data?.message || err?.message || "Upload ảnh thất bại";
+      toast.error(errorMsg);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
-    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#1d1d1f] text-[26px] font-bold text-white shadow-lg select-none">
-      {initials}
+    <div className="relative h-20 w-20">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="Avatar" className="h-full w-full rounded-full object-cover shadow-lg" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center rounded-full bg-[#1d1d1f] text-[26px] font-bold text-white shadow-lg select-none">
+          {initials}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={isUploading}
+        className="absolute bottom-0 right-0 rounded-full bg-[#0071e3] p-1.5 text-white shadow-md hover:bg-[#0055b8] disabled:opacity-60 transition-all"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
     </div>
   );
 }
@@ -107,6 +153,7 @@ function ProfileTab({ user, onSave }) {
     phone: user?.phone || "",
     dob: user?.dob || "",
     gender: user?.gender || "",
+    avatarUrl: user?.avatarUrl || "",
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -114,6 +161,11 @@ function ProfileTab({ user, onSave }) {
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
     setErrors((er) => ({ ...er, [e.target.name]: undefined }));
+  };
+
+  const handleAvatarUpload = (url) => {
+    setForm((f) => ({ ...f, avatarUrl: url }));
+    toast.success("Ảnh đại diện được cập nhật!");
   };
 
   const handleSubmit = async (e) => {
@@ -128,9 +180,9 @@ function ProfileTab({ user, onSave }) {
     try {
       await axiosClient.put(
         "/api/users/profile",
-        { fullName: form.name, phone: form.phone, dob: form.dob, gender: form.gender }
+        { fullName: form.name, phone: form.phone, dob: form.dob, gender: form.gender, avatarUrl: form.avatarUrl }
       );
-      const updated = { ...user, fullName: form.name, name: form.name, phone: form.phone, dob: form.dob, gender: form.gender };
+      const updated = { ...user, fullName: form.name, name: form.name, phone: form.phone, dob: form.dob, gender: form.gender, avatarUrl: form.avatarUrl };
       localStorage.setItem("user", JSON.stringify(updated));
       onSave(updated);
       toast.success("Cập nhật thông tin thành công!");
@@ -145,7 +197,7 @@ function ProfileTab({ user, onSave }) {
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
       {/* Avatar section */}
       <div className="flex items-center gap-5">
-        <Avatar name={form.name || user?.email} />
+        <Avatar name={form.name || user?.email} avatarUrl={form.avatarUrl} onUpload={handleAvatarUpload} />
         <div>
           <p className="font-semibold text-[#1d1d1f]">{form.name || "Người dùng"}</p>
           <p className="text-sm text-[#6e6e73]">{user?.email}</p>

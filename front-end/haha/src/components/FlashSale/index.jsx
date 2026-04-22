@@ -73,17 +73,25 @@ function FlashSaleTitle() {
 }
 
 /* ─── Product card (light) ──────────────────────────────────────── */
-function FlashCard({ product }) {
+function FlashCard({ product, discountType, discountValue, flashQuantity, flashSold }) {
   const image = product.images?.[0]?.url;
-  const salePrice = product.flashSalePrice || product.salePrice || product.basePrice;
   const originalPrice = product.basePrice;
+  let salePrice = product.basePrice;
+
+  if (discountType === "percent") {
+    salePrice = Math.round(originalPrice * (1 - discountValue / 100));
+  } else if (discountType === "fixed") {
+    salePrice = Math.max(0, originalPrice - discountValue);
+  }
+
   const discount =
     salePrice && salePrice < originalPrice
       ? Math.round((1 - salePrice / originalPrice) * 100)
       : null;
-  const totalStock = (product.sold || 0) + (product.stock || 0);
-  const soldPct = totalStock > 0 ? Math.min(100, Math.round(((product.sold || 0) / totalStock) * 100)) : 0;
-  const remaining = product.stock || 0;
+  const totalFlashStock = flashQuantity || product.stock || 0;
+  const soldFlash = flashSold || 0;
+  const soldPct = totalFlashStock > 0 ? Math.min(100, Math.round((soldFlash / totalFlashStock) * 100)) : 0;
+  const remaining = Math.max(0, totalFlashStock - soldFlash);
 
   return (
     <Link
@@ -134,7 +142,7 @@ function FlashCard({ product }) {
             <div className="absolute inset-0 flex items-center justify-center gap-1">
               <FlameIcon />
               <span className="text-[10px] font-semibold text-[#1d1d1f]">
-                Còn {remaining}/{totalStock || remaining}
+                Còn {remaining}/{totalFlashStock || remaining}
               </span>
             </div>
           </div>
@@ -169,17 +177,44 @@ export default function FlashSale() {
   useEffect(() => {
     fetchAPI("/api/products/flash-sales")
       .then((data) => {
+        console.log("[FlashSale] API Response:", data);
         if (data && data.length > 0) {
-          setProducts(data);
-          const soonest = data.reduce((min, p) =>
-            p.flashSaleEndsAt && (!min || new Date(p.flashSaleEndsAt) < new Date(min))
-              ? p.flashSaleEndsAt
-              : min
-          , null);
+          // Transform flash sales to flat product list with discount info
+          const flatProducts = [];
+          let soonest = null;
+
+          data.forEach((flashSale) => {
+            if (new Date(flashSale.endsAt) < (soonest ? new Date(soonest) : new Date())) {
+              soonest = flashSale.endsAt;
+            } else if (!soonest) {
+              soonest = flashSale.endsAt;
+            }
+
+            flashSale.products?.forEach((item) => {
+              if (item.productId) {
+                flatProducts.push({
+                  ...item.productId,
+                  discountType: item.discountType,
+                  discountValue: item.discountValue,
+                  flashQuantity: item.quantity,
+                  flashSold: item.sold || 0,
+                  flashSaleEndsAt: flashSale.endsAt,
+                });
+              }
+            });
+          });
+
+          console.log("[FlashSale] Transformed products:", flatProducts);
+          console.log("[FlashSale] Soonest end:", soonest);
+          setProducts(flatProducts);
           if (soonest) setEndsAt(new Date(soonest));
+        } else {
+          console.log("[FlashSale] No flash sales data or empty array");
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[FlashSale] Error fetching:", err);
+      });
   }, []);
 
   const scroll = useCallback((dir) => {
@@ -248,7 +283,14 @@ export default function FlashSale() {
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {products.map((product) => (
-              <FlashCard key={product._id} product={product} />
+              <FlashCard
+                key={product._id}
+                product={product}
+                discountType={product.discountType}
+                discountValue={product.discountValue}
+                flashQuantity={product.flashQuantity}
+                flashSold={product.flashSold}
+              />
             ))}
           </div>
 

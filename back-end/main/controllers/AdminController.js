@@ -72,12 +72,39 @@ exports.getTopProducts = async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
 
-    const products = await Product.find({ deletedAt: null })
-      .select("name sold basePrice images")
-      .sort({ sold: -1 })
-      .limit(limit);
+    // Tính số lượng bán từ các đơn hàng đã delivered
+    const topProducts = await Order.aggregate([
+      { $match: { status: { $in: ["Confirmed", "Shipped", "Delivered"] } } },
+      { $unwind: "$products" },
+      {
+        $group: {
+          _id: "$products.product",
+          sold: { $sum: "$products.quantity" },
+        },
+      },
+      { $sort: { sold: -1 } },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "products",
+          localField: "_id",
+          foreignField: "_id",
+          as: "productData",
+        },
+      },
+      { $unwind: "$productData" },
+      {
+        $project: {
+          _id: 1,
+          name: "$productData.name",
+          basePrice: "$productData.basePrice",
+          images: "$productData.images",
+          sold: 1,
+        },
+      },
+    ]);
 
-    return res.status(200).json({ success: true, data: products });
+    return res.status(200).json({ success: true, data: topProducts });
   } catch (err) {
     next(err);
   }
@@ -216,9 +243,6 @@ exports.getAllOrders = async (req, res, next) => {
 // ─── Update Order Status ──────────────────────────────────────────────────────
 // PATCH /api/admin/orders/:orderId/status
 exports.updateOrderStatus = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { orderId } = req.params;
     const { status } = req.body;
@@ -232,14 +256,12 @@ exports.updateOrderStatus = async (req, res, next) => {
       Cancelled: [],
     };
 
-    const order = await Order.findById(orderId).session(session);
+    const order = await Order.findById(orderId);
     if (!order) {
-      await session.abortTransaction();
       return res.status(404).json({ success: false, message: "Đơn hàng không tồn tại." });
     }
 
     if (!validTransitions[order.status]?.includes(status)) {
-      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: `Không thể chuyển từ "${order.status}" sang "${status}".`,
@@ -251,14 +273,12 @@ exports.updateOrderStatus = async (req, res, next) => {
       for (const item of order.products) {
         await Product.updateOne(
           { _id: item.product },
-          { $inc: { stock: item.quantity, sold: -item.quantity } },
-          { session }
+          { $inc: { stock: item.quantity, sold: -item.quantity } }
         );
       }
     }
 
-    await Order.updateOne({ _id: orderId }, { status }, { session });
-    await session.commitTransaction();
+    await Order.updateOne({ _id: orderId }, { status });
 
     // Thông báo cho user về cập nhật đơn hàng
     const statusMessages = {
@@ -282,10 +302,7 @@ exports.updateOrderStatus = async (req, res, next) => {
 
     return res.status(200).json({ success: true, message: "Cập nhật trạng thái đơn hàng thành công." });
   } catch (err) {
-    await session.abortTransaction();
     next(err);
-  } finally {
-    session.endSession();
   }
 };
 
@@ -391,83 +408,163 @@ exports.deleteBanner = async (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TODO: Uncomment khi đã tạo FlashSale model
 
+// ─── Get All Flash Sales ──────────────────────────────────────────────────────
+// GET /api/admin/flash-sales
 exports.getFlashSales = async (req, res, next) => {
   try {
     const flashSales = await FlashSale.find()
-      .populate("productId", "name basePrice salePrice images")
+      .populate("products.productId", "name basePrice salePrice images")
       .sort({ startsAt: -1 });
     return res.status(200).json({ success: true, data: flashSales });
   } catch (err) { next(err); }
 };
 
+// ─── Create Flash Sale ────────────────────────────────────────────────────────
+// POST /api/admin/flash-sales
+// { name, description, startsAt, endsAt, products: [ { productId, discountType, discountValue } ] }
 exports.createFlashSale = async (req, res, next) => {
   try {
-    const { productId, flashSalePrice, startsAt, endsAt } = req.body;
-    if (!productId || flashSalePrice === undefined || !startsAt || !endsAt) {
+    const { name, description, startsAt, endsAt, products } = req.body;
+
+    if (!name || !startsAt || !endsAt || !products || products.length === 0) {
       return res.status(400).json({ success: false, message: "Thiếu thông tin bắt buộc." });
     }
     if (new Date(startsAt) >= new Date(endsAt)) {
       return res.status(400).json({ success: false, message: "Thời gian bắt đầu phải trước thời gian kết thúc." });
     }
 
-    // Cập nhật trường flash sale trên Product đồng thời
-    await Product.updateOne(
-      { _id: productId },
-      { isFlashSale: true, flashSalePrice, flashSaleEndsAt: new Date(endsAt) }
-    );
+    // Validate products array
+    for (const p of products) {
+      if (!p.productId || !p.discountType || p.discountValue === undefined || !p.quantity) {
+        return res.status(400).json({ success: false, message: "Sản phẩm phải có productId, discountType, discountValue, quantity." });
+      }
+      if (!["percent", "fixed"].includes(p.discountType)) {
+        return res.status(400).json({ success: false, message: "discountType phải là 'percent' hoặc 'fixed'." });
+      }
+      if (p.discountType === "percent" && (p.discountValue <= 0 || p.discountValue > 100)) {
+        return res.status(400).json({ success: false, message: "Giảm giá % phải từ 1 đến 100." });
+      }
+      if (p.quantity <= 0) {
+        return res.status(400).json({ success: false, message: "Số lượng phải lớn hơn 0." });
+      }
+
+      // Kiểm tra giá sau flash sale không được nhỏ hơn giá gốc
+      const product = await Product.findById(p.productId);
+      if (product) {
+        const basePrice = product.basePrice;
+        const salePrice = product.salePrice || basePrice;
+        let finalPrice;
+
+        if (p.discountType === "percent") {
+          finalPrice = salePrice * (1 - p.discountValue / 100);
+        } else {
+          finalPrice = salePrice - p.discountValue;
+        }
+
+        if (finalPrice < basePrice) {
+          const productName = product.name;
+          return res.status(400).json({
+            success: false,
+            message: `Giá sau flash sale của sản phẩm "${productName}" không được nhỏ hơn giá gốc.`
+          });
+        }
+      }
+    }
 
     const flashSale = await FlashSale.create({
-      productId,
-      flashSalePrice,
+      name,
+      description: description || "",
       startsAt: new Date(startsAt),
       endsAt: new Date(endsAt),
+      products,
       createdBy: req.user.id,
     });
 
+    console.info(`[AUDIT] Admin ${req.user.id} created flash sale ${flashSale._id}`);
     return res.status(201).json({ success: true, message: "Tạo flash sale thành công.", data: flashSale });
   } catch (err) { next(err); }
 };
 
+// ─── Update Flash Sale ────────────────────────────────────────────────────────
+// PUT /api/admin/flash-sales/:id
 exports.updateFlashSale = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { flashSalePrice, startsAt, endsAt, isActive } = req.body;
+    const { name, description, startsAt, endsAt, products, isActive } = req.body;
 
     const fs = await FlashSale.findById(id);
     if (!fs) return res.status(404).json({ success: false, message: "Flash sale không tồn tại." });
 
-    if (flashSalePrice !== undefined) fs.flashSalePrice = flashSalePrice;
+    if (name !== undefined) fs.name = name;
+    if (description !== undefined) fs.description = description;
     if (startsAt !== undefined) fs.startsAt = new Date(startsAt);
     if (endsAt !== undefined) fs.endsAt = new Date(endsAt);
     if (isActive !== undefined) fs.isActive = isActive;
+    if (products !== undefined) fs.products = products;
 
     await fs.save();
 
-    // Đồng bộ lại Product nếu isActive thay đổi
-    if (isActive === false) {
-      await Product.updateOne(
-        { _id: fs.productId },
-        { isFlashSale: false, flashSalePrice: null, flashSaleEndsAt: null }
-      );
-    }
-
+    console.info(`[AUDIT] Admin ${req.user.id} updated flash sale ${id}`);
     return res.status(200).json({ success: true, message: "Cập nhật flash sale thành công.", data: fs });
   } catch (err) { next(err); }
 };
 
+// ─── Add Product To Flash Sale ────────────────────────────────────────────────
+// PATCH /api/admin/flash-sales/:id/products
+// { productId, discountType, discountValue }
+exports.addProductToFlashSale = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { productId, discountType, discountValue } = req.body;
+
+    if (!productId || !discountType || discountValue === undefined) {
+      return res.status(400).json({ success: false, message: "Thiếu productId, discountType, discountValue." });
+    }
+
+    const fs = await FlashSale.findById(id);
+    if (!fs) return res.status(404).json({ success: false, message: "Flash sale không tồn tại." });
+
+    // Check if product already in flash sale
+    if (fs.products.some(p => p.productId.toString() === productId)) {
+      return res.status(409).json({ success: false, message: "Sản phẩm này đã có trong flash sale." });
+    }
+
+    fs.products.push({ productId, discountType, discountValue });
+    await fs.save();
+
+    console.info(`[AUDIT] Admin ${req.user.id} added product ${productId} to flash sale ${id}`);
+    return res.status(200).json({ success: true, message: "Thêm sản phẩm thành công.", data: fs });
+  } catch (err) { next(err); }
+};
+
+// ─── Remove Product From Flash Sale ────────────────────────────────────────────
+// DELETE /api/admin/flash-sales/:id/products/:productId
+exports.removeProductFromFlashSale = async (req, res, next) => {
+  try {
+    const { id, productId } = req.params;
+
+    const fs = await FlashSale.findById(id);
+    if (!fs) return res.status(404).json({ success: false, message: "Flash sale không tồn tại." });
+
+    fs.products = fs.products.filter(p => p.productId.toString() !== productId);
+    await fs.save();
+
+    console.info(`[AUDIT] Admin ${req.user.id} removed product ${productId} from flash sale ${id}`);
+    return res.status(200).json({ success: true, message: "Xóa sản phẩm thành công.", data: fs });
+  } catch (err) { next(err); }
+};
+
+// ─── Delete Flash Sale ────────────────────────────────────────────────────────
+// DELETE /api/admin/flash-sales/:id
 exports.deleteFlashSale = async (req, res, next) => {
   try {
     const { id } = req.params;
     const fs = await FlashSale.findById(id);
     if (!fs) return res.status(404).json({ success: false, message: "Flash sale không tồn tại." });
 
-    // Hoàn lại trạng thái Product
-    await Product.updateOne(
-      { _id: fs.productId },
-      { isFlashSale: false, flashSalePrice: null, flashSaleEndsAt: null }
-    );
-
     await FlashSale.deleteOne({ _id: id });
+
+    console.info(`[AUDIT] Admin ${req.user.id} deleted flash sale ${id}`);
     return res.status(200).json({ success: true, message: "Xóa flash sale thành công." });
   } catch (err) { next(err); }
 };

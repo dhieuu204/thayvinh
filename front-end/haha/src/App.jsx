@@ -35,6 +35,7 @@ import AdminProductsPage from "./pages/admin/AdminProductsPage";
 import AdminReviewsPage from "./pages/admin/AdminReviewsPage";
 import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage";
 import AdminVouchersPage from "./pages/admin/AdminVouchersPage";
+import AdminFlashSalesPage from "./pages/admin/AdminFlashSalesPage";
 import AdminReturnRequestsPage from "./pages/admin/AdminReturnRequestsPage";
 
 /** Chặn route khi chưa đăng nhập → redirect /login */
@@ -91,6 +92,7 @@ function App() {
           <Route path="reviews"    element={<AdminReviewsPage />} />
           <Route path="categories" element={<AdminCategoriesPage />} />
           <Route path="vouchers"   element={<AdminVouchersPage />} />
+          <Route path="flash-sales" element={<AdminFlashSalesPage />} />
           <Route path="returns"    element={<AdminReturnRequestsPage />} />
         </Route>
 

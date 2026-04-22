@@ -87,7 +87,11 @@ export default function AdminReviewsPage() {
   const [avgRating, setAvgRating] = useState(0);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [replyModal, setReplyModal] = useState(null);
+  const [allReviews, setAllReviews] = useState([]);
+  const [loadingAllReviews, setLoadingAllReviews] = useState(true);
+  const [ratingFilter, setRatingFilter] = useState(null);
   const dropdownRef = useRef(null);
+  const refreshIntervalRef = useRef(null);
 
   // Load danh sách sản phẩm để chọn
   useEffect(() => {
@@ -95,6 +99,21 @@ export default function AdminReviewsPage() {
       setProducts(r.data.data?.products || []);
     }).catch(() => {});
   }, []);
+
+  // Load tất cả đánh giá khi vào trang
+  useEffect(() => {
+    loadAllReviews();
+  }, []);
+
+  const loadAllReviews = () => {
+    setLoadingAllReviews(true);
+    axiosClient.get(`/api/reviews?limit=100`)
+      .then((r) => {
+        setAllReviews(r.data.data?.reviews || []);
+      })
+      .catch(() => setAllReviews([]))
+      .finally(() => setLoadingAllReviews(false));
+  };
 
   // Filter sản phẩm theo search
   useEffect(() => {
@@ -110,11 +129,23 @@ export default function AdminReviewsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Cleanup auto-refresh interval when component unmounts or product changes
+  useEffect(() => {
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+    };
+  }, [selectedProduct]);
+
   const selectProduct = (product) => {
     setSelectedProduct(product);
     setSearch(product.name);
     setShowDropdown(false);
     loadReviews(product._id);
+    // Auto-refresh reviews every 5 seconds when a product is selected
+    if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+    refreshIntervalRef.current = setInterval(() => {
+      loadReviews(product._id);
+    }, 5000);
   };
 
   const loadReviews = (productId) => {
@@ -142,6 +173,11 @@ export default function AdminReviewsPage() {
   const handleReplySave = (reviewId, reply) => {
     setReviews((prev) => prev.map((r) => r._id === reviewId ? { ...r, reply } : r));
     setReplyModal(null);
+  };
+
+  const getFilteredReviews = (reviewList) => {
+    if (!ratingFilter) return reviewList;
+    return reviewList.filter((r) => r.rating === ratingFilter);
   };
 
   return (
@@ -195,9 +231,181 @@ export default function AdminReviewsPage() {
         )}
       </div>
 
-      {/* Reviews */}
+      {/* Rating Filter */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-[#1d1d1f]">Lọc theo sao:</span>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setRatingFilter(null)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              ratingFilter === null
+                ? "bg-[#1d1d1f] text-white"
+                : "border border-black/[0.1] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+            }`}
+          >
+            Tất cả
+          </button>
+          {[5, 4, 3, 2, 1].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setRatingFilter(star)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1 ${
+                ratingFilter === star
+                  ? "bg-[#f59e0b] text-white"
+                  : "border border-black/[0.1] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+              }`}
+            >
+              <span>{"★".repeat(star)}</span>
+              <span className="text-xs">({allReviews.filter((r) => r.rating === star).length})</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* All Reviews List - Show on page load */}
+      {!selectedProduct && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-[#1d1d1f]">Tất cả đánh giá</h2>
+              <p className="text-sm text-[#8e8e93]">{getFilteredReviews(allReviews).length} / {allReviews.length} đánh giá</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadAllReviews}
+              disabled={loadingAllReviews}
+              className="flex items-center gap-2 rounded-full border border-black/[0.1] px-4 py-2 text-sm font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] disabled:opacity-50 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={loadingAllReviews ? "animate-spin" : ""}>
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36M20.49 15a9 9 0 0 1-14.85 3.36"/>
+              </svg>
+              Làm mới
+            </button>
+          </div>
+
+          {loadingAllReviews ? (
+            <div className="flex justify-center py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#1d1d1f] border-t-transparent" />
+            </div>
+          ) : allReviews.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/[0.12] bg-white py-16 text-center">
+              <p className="text-sm text-[#8e8e93]">Chưa có đánh giá nào</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {getFilteredReviews(allReviews).map((r) => (
+                <div key={r._id} className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1d1d1f] text-xs font-bold text-white">
+                          {(r.userId?.fullName || r.userId?.username || "U")[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[13px] font-medium text-[#1d1d1f]">
+                            {r.userId?.fullName || r.userId?.username || "Người dùng"}
+                          </p>
+                          <p className="text-[11px] text-[#8e8e93]">{fmtDate(r.createdAt)}</p>
+                        </div>
+                      </div>
+                      <p className="text-[12px] text-[#6e6e73] mb-2">
+                        Sản phẩm: <span className="font-medium text-[#1d1d1f]">{r.productId?.name || "N/A"}</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Stars rating={r.rating} />
+                      <button
+                        type="button"
+                        onClick={() => setReplyModal(r)}
+                        className="flex items-center gap-1 rounded-full border border-[#0071e3] px-2.5 py-1 text-[11px] font-medium text-[#0071e3] hover:bg-[#eef6ff] transition-colors"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        {r.reply ? "Sửa" : "Phản hồi"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(r._id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-black/[0.1] text-[#8e8e93] hover:border-[#e53e3e] hover:text-[#e53e3e] transition-colors"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-[13px] text-[#3a3a3c]">{r.comment}</p>
+
+                  {r.images && r.images.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {r.images.map((img, idx) => (
+                        <a
+                          key={idx}
+                          href={img}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group relative aspect-square overflow-hidden rounded-lg bg-[#f5f5f7]"
+                        >
+                          <img src={img} alt={`review-${idx}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                              <path d="M12 2c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10-4.477-10-10-10zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm3.5-9c.828 0 1.5-.672 1.5-1.5s-.672-1.5-1.5-1.5-1.5.672-1.5 1.5.672 1.5 1.5 1.5z"/>
+                            </svg>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {r.reply && (
+                    <div className="mt-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3">
+                      <p className="mb-1 text-[11px] font-semibold text-[#1d4ed8]">Phản hồi từ cửa hàng</p>
+                      <p className="text-[13px] text-[#1e40af]">{r.reply}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reviews by selected product */}
       {selectedProduct && (
         <div className="space-y-4">
+          {/* Rating Filter for product reviews */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-[#1d1d1f]">Lọc theo sao:</span>
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setRatingFilter(null)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  ratingFilter === null
+                    ? "bg-[#1d1d1f] text-white"
+                    : "border border-black/[0.1] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                }`}
+              >
+                Tất cả
+              </button>
+              {[5, 4, 3, 2, 1].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRatingFilter(star)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1 ${
+                    ratingFilter === star
+                      ? "bg-[#f59e0b] text-white"
+                      : "border border-black/[0.1] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                  }`}
+                >
+                  <span>{"★".repeat(star)}</span>
+                  <span className="text-xs">({reviews.filter((r) => r.rating === star).length})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Header */}
           <div className="flex items-center justify-between rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
             <div className="flex items-center gap-3">
@@ -206,9 +414,20 @@ export default function AdminReviewsPage() {
               </div>
               <div>
                 <p className="text-[15px] font-semibold text-[#1d1d1f]">{selectedProduct.name}</p>
-                <p className="text-sm text-[#8e8e93]">{reviews.length} đánh giá · ★ {avgRating.toFixed(1)}</p>
+                <p className="text-sm text-[#8e8e93]">{getFilteredReviews(reviews).length} / {reviews.length} đánh giá · ★ {avgRating.toFixed(1)}</p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => loadReviews(selectedProduct._id)}
+              disabled={loadingReviews}
+              className="flex items-center gap-2 rounded-full border border-black/[0.1] px-4 py-2 text-sm font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] disabled:opacity-50 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={loadingReviews ? "animate-spin" : ""}>
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36M20.49 15a9 9 0 0 1-14.85 3.36"/>
+              </svg>
+              Làm mới
+            </button>
           </div>
 
           {/* Review list */}
@@ -222,7 +441,7 @@ export default function AdminReviewsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {reviews.map((r) => (
+              {getFilteredReviews(reviews).map((r) => (
                 <div key={r._id} className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5">
@@ -258,6 +477,27 @@ export default function AdminReviewsPage() {
 
                   <p className="mt-3 text-[13px] text-[#3a3a3c]">{r.comment}</p>
 
+                  {r.images && r.images.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {r.images.map((img, idx) => (
+                        <a
+                          key={idx}
+                          href={img}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group relative aspect-square overflow-hidden rounded-lg bg-[#f5f5f7]"
+                        >
+                          <img src={img} alt={`review-${idx}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/40 group-hover:opacity-100">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                              <path d="M12 2c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10-4.477-10-10-10zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm3.5-9c.828 0 1.5-.672 1.5-1.5s-.672-1.5-1.5-1.5-1.5.672-1.5 1.5.672 1.5 1.5 1.5z"/>
+                            </svg>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
                   {r.reply && (
                     <div className="mt-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3">
                       <p className="mb-1 text-[11px] font-semibold text-[#1d4ed8]">Phản hồi từ cửa hàng</p>
@@ -271,17 +511,6 @@ export default function AdminReviewsPage() {
         </div>
       )}
 
-      {!selectedProduct && (
-        <div className="rounded-2xl border border-dashed border-black/[0.12] bg-white py-24 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#f5f5f7] text-[#c7c7cc]">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-          </div>
-          <p className="text-[15px] font-medium text-[#1d1d1f]">Tìm sản phẩm để xem đánh giá</p>
-          <p className="mt-1 text-sm text-[#8e8e93]">Nhập tên sản phẩm vào ô tìm kiếm phía trên</p>
-        </div>
-      )}
     </div>
   );
 }

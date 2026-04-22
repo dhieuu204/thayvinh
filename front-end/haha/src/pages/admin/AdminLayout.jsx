@@ -77,6 +77,16 @@ const NAV = [
     ),
   },
   {
+    to: "/admin/flash-sales",
+    label: "Flash Sale",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><polyline points="13 2 13 9 20 9" />
+        <path d="M9 15h6M9 11h6" />
+      </svg>
+    ),
+  },
+  {
     to: "/admin/returns",
     label: "Hoàn hàng",
     icon: (
@@ -88,14 +98,15 @@ const NAV = [
 ];
 
 const PAGE_TITLES = {
-  "/admin":            "Tổng quan",
-  "/admin/orders":     "Quản lý đơn hàng",
-  "/admin/users":      "Quản lý người dùng",
-  "/admin/products":   "Quản lý sản phẩm",
-  "/admin/reviews":    "Quản lý đánh giá",
-  "/admin/categories": "Quản lý danh mục",
-  "/admin/vouchers":   "Quản lý Voucher",
-  "/admin/returns":    "Quản lý hoàn hàng",
+  "/admin":              "Tổng quan",
+  "/admin/orders":       "Quản lý đơn hàng",
+  "/admin/users":        "Quản lý người dùng",
+  "/admin/products":     "Quản lý sản phẩm",
+  "/admin/reviews":      "Quản lý đánh giá",
+  "/admin/categories":   "Quản lý danh mục",
+  "/admin/vouchers":     "Quản lý Voucher",
+  "/admin/flash-sales":  "Quản lý Flash Sale",
+  "/admin/returns":      "Quản lý hoàn hàng",
 };
 
 export default function AdminLayout() {

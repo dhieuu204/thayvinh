@@ -138,21 +138,27 @@ exports.createOrder = async (req, res, next) => {
 };
 
 // ─── Get My Orders ────────────────────────────────────────────────────────────
-// GET /api/orders/my?page=1&limit=10
+// GET /api/orders/my?page=1&limit=10&status=Delivered
 exports.getMyOrders = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const page   = parseInt(req.query.page)  || 1;
     const limit  = parseInt(req.query.limit) || 10;
     const skip   = (page - 1) * limit;
+    const { status } = req.query;
+
+    const filter = { user: userId };
+    if (status) {
+      filter.status = status;
+    }
 
     const [orders, total] = await Promise.all([
-      Order.find({ user: userId })
+      Order.find(filter)
         .populate("products.product", "name basePrice salePrice images")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      Order.countDocuments({ user: userId }),
+      Order.countDocuments(filter),
     ]);
 
     return res.status(200).json({

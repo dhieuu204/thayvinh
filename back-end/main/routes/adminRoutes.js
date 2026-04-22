@@ -29,9 +29,11 @@ router.put("/banners/:id",    ...guard, AdminController.updateBanner);
 router.delete("/banners/:id", ...guard, AdminController.deleteBanner);
 
 // ── Quản lý flash sale ────────────────────────────────────────────────────────
-router.get("/flash-sales",        ...guard, AdminController.getFlashSales);
-router.post("/flash-sales",       ...guard, AdminController.createFlashSale);
-router.put("/flash-sales/:id",    ...guard, AdminController.updateFlashSale);
-router.delete("/flash-sales/:id", ...guard, AdminController.deleteFlashSale);
+router.get("/flash-sales",                              ...guard, AdminController.getFlashSales);
+router.post("/flash-sales",                             ...guard, AdminController.createFlashSale);
+router.put("/flash-sales/:id",                          ...guard, AdminController.updateFlashSale);
+router.patch("/flash-sales/:id/products",              ...guard, AdminController.addProductToFlashSale);
+router.delete("/flash-sales/:id/products/:productId",  ...guard, AdminController.removeProductFromFlashSale);
+router.delete("/flash-sales/:id",                       ...guard, AdminController.deleteFlashSale);
 
 module.exports = router;

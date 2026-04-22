@@ -8,6 +8,10 @@ const axiosClient = axios.create({ baseURL: API_URL, withCredentials: true });
 axiosClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Không set Content-Type cho FormData (axios sẽ tự handle)
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
   return config;
 });
 

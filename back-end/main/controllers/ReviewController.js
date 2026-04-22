@@ -52,6 +52,35 @@ exports.createReview = async (req, res, next) => {
   }
 };
 
+// ─── Get All Reviews (Admin) ──────────────────────────────────────────────────
+// GET /api/reviews?page=1&limit=100
+exports.getAllReviews = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 100 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [reviews, total] = await Promise.all([
+      Review.find({})
+        .populate("userId", "username fullName avatarUrl _id")
+        .populate("productId", "name")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Review.countDocuments({}),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        reviews,
+        pagination: { page: parseInt(page), limit: parseInt(limit), total, totalPages: Math.ceil(total / parseInt(limit)) },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Get Reviews By Product ───────────────────────────────────────────────────
 // GET /api/reviews/product/:productId?page=1&limit=10&rating=5
 exports.getReviewsByProduct = async (req, res, next) => {
@@ -60,12 +89,12 @@ exports.getReviewsByProduct = async (req, res, next) => {
     const { page = 1, limit = 10, rating } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const filter = { productId, isVisible: true, deletedAt: null };
+    const filter = { productId };
     if (rating) filter.rating = parseInt(rating);
 
     const [reviews, total] = await Promise.all([
       Review.find(filter)
-        .populate("userId", "username fullName avatarUrl")
+        .populate("userId", "username fullName avatarUrl _id")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -78,7 +107,7 @@ exports.getReviewsByProduct = async (req, res, next) => {
     }
 
     const ratingAgg = await Review.aggregate([
-      { $match: { productId: new mongoose.Types.ObjectId(productId), isVisible: true, deletedAt: null } },
+      { $match: { productId: new mongoose.Types.ObjectId(productId) } },
       { $group: { _id: null, avgRating: { $avg: "$rating" }, total: { $sum: 1 } } },
     ]);
     const avgRating = ratingAgg[0]?.avgRating?.toFixed(1) ?? 0;
@@ -132,12 +161,12 @@ exports.deleteReview = async (req, res, next) => {
     const userId = req.user.id;
     const { reviewId } = req.params;
 
-    const review = await Review.findOne({ _id: reviewId, userId, deletedAt: null });
+    const review = await Review.findOne({ _id: reviewId, userId });
     if (!review) {
       return res.status(404).json({ success: false, message: "Đánh giá không tồn tại." });
     }
 
-    await Review.updateOne({ _id: reviewId }, { deletedAt: new Date(), isVisible: false });
+    await Review.deleteOne({ _id: reviewId });
     return res.status(200).json({ success: true, message: "Đã xóa đánh giá." });
   } catch (err) {
     next(err);
@@ -155,7 +184,7 @@ exports.replyReview = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Nội dung phản hồi không được để trống." });
     }
 
-    const review = await Review.findOne({ _id: reviewId, deletedAt: null });
+    const review = await Review.findOne({ _id: reviewId });
     if (!review) {
       return res.status(404).json({ success: false, message: "Đánh giá không tồn tại." });
     }
@@ -176,12 +205,12 @@ exports.deleteAnyReview = async (req, res, next) => {
   try {
     const { reviewId } = req.params;
 
-    const review = await Review.findOne({ _id: reviewId, deletedAt: null });
+    const review = await Review.findOne({ _id: reviewId });
     if (!review) {
       return res.status(404).json({ success: false, message: "Đánh giá không tồn tại." });
     }
 
-    await Review.updateOne({ _id: reviewId }, { deletedAt: new Date(), isVisible: false });
+    await Review.deleteOne({ _id: reviewId });
     console.info(`[AUDIT] Admin ${req.user.id} deleted review ${reviewId}`);
     return res.status(200).json({ success: true, message: "Đã xóa đánh giá." });
   } catch (err) {

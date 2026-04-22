@@ -5,7 +5,6 @@ const voucherSchema = new mongoose.Schema(
     code: {
       type: String,
       required: true,
-      unique: true,
       uppercase: true,
       trim: true,
     },
@@ -57,7 +56,10 @@ const voucherSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-voucherSchema.index({ code: 1 });
+voucherSchema.index(
+  { code: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
 voucherSchema.index({ isActive: 1, expiresAt: 1 });
 
 module.exports = mongoose.model("Voucher", voucherSchema);

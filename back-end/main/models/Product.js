@@ -11,7 +11,6 @@ const productSchema = new mongoose.Schema(
     },
     slug: {
       type: String,
-      unique: true,
       lowercase: true,
       trim: true,
     },
@@ -37,12 +36,17 @@ const productSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
+    saleDiscount: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 100,
+    },
 
     // ─── Ảnh ──────────────────────────────────────────────────────────────────
     images: [
       {
         url:       { type: String, required: true },
-        publicId:  { type: String, required: true }, // Cloudinary public_id để xóa ảnh
         isPrimary: { type: Boolean, default: false },
       },
     ],
@@ -91,6 +95,10 @@ const productSchema = new mongoose.Schema(
 );
 
 // ─── Indexes ──────────────────────────────────────────────────────────────────
+productSchema.index(
+  { slug: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
 productSchema.index({ category: 1, basePrice: 1 });
 productSchema.index({ isActive: 1, deletedAt: 1 });
 productSchema.index({ name: "text", tags: "text" }); // Full-text search

@@ -341,12 +341,22 @@ function OrderCard({ order, onCancel, onReturn }) {
               )}
               {order.status === "delivered" && !order._returnRequested && (
                 <div className="mt-3 flex gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    className="rounded-full border border-[#0071e3] px-4 py-2 text-sm font-medium text-[#0071e3] transition-all hover:bg-[#eef6ff]"
-                  >
-                    Đánh giá sản phẩm
-                  </button>
+                  {order.items && order.items.length > 0 ? (
+                    <Link
+                      to={`/products/${order.items[0].productId}`}
+                      className="rounded-full border border-[#0071e3] px-4 py-2 text-sm font-medium text-[#0071e3] transition-all hover:bg-[#eef6ff]"
+                    >
+                      Đánh giá sản phẩm
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="rounded-full border border-[#d1d5db] px-4 py-2 text-sm font-medium text-[#9ca3af] cursor-not-allowed"
+                    >
+                      Không có sản phẩm
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowReturn(true)}
@@ -391,6 +401,7 @@ function normalizeOrder(o) {
     ...o,
     status: STATUS_MAP[o.status] || o.status?.toLowerCase() || o.status,
     items: (o.products || o.items || []).map((p) => ({
+      productId: p.product?._id,
       name: p.product?.name || p.name || "Sản phẩm",
       image: p.product?.images?.[0]?.url || p.image,
       price: p.product?.salePrice || p.product?.basePrice || p.price || 0,

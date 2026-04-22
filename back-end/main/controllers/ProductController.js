@@ -2,6 +2,7 @@ const Product            = require("../models/Product");
 const Category           = require("../models/Category");
 const ProductVariant     = require("../models/ProductVariant");
 const RestockSubscriber  = require("../models/RestockSubscriber");
+const FlashSale          = require("../models/FlashSale");
 
 // TODO: Cài slugify: npm install slugify
 // const slugify = require("slugify");
@@ -281,22 +282,19 @@ exports.getCategoryShowcase = async (req, res, next) => {
 
 // ─── 6.6 Get Flash Sales ──────────────────────────────────────────────────────
 // GET /api/products/flash-sales
-// Public — chỉ lấy flash sale còn hiệu lực, sort theo thời gian kết thúc sớm nhất
+// Public — lấy flash sale đang chạy, populate products
 exports.getFlashSales = async (req, res, next) => {
   try {
     const now = new Date();
 
-    const products = await Product.find({
-      isActive: true,
-      deletedAt: null,
-      isFlashSale: true,
-      flashSaleEndsAt: { $gt: now },
+    const flashSales = await FlashSale.find({
+      startsAt: { $lte: now },
+      endsAt: { $gt: now },
     })
-      .select("-__v")
-      .populate("category", "name slug")
-      .sort({ flashSaleEndsAt: 1 });
+      .populate("products.productId", "name basePrice salePrice images slug")
+      .sort({ endsAt: 1 });
 
-    return res.status(200).json({ success: true, data: products });
+    return res.status(200).json({ success: true, data: flashSales });
   } catch (err) {
     next(err);
   }
@@ -307,30 +305,42 @@ exports.getFlashSales = async (req, res, next) => {
 // Admin only — tạo slug tự động từ name, xử lý ảnh qua Cloudinary middleware
 exports.createProduct = async (req, res, next) => {
   try {
-    const { name, description, category, basePrice, salePrice, stock, tags } = req.body;
+    const { name, description, category, basePrice, salePrice, saleDiscount, stock, tags, images } = req.body;
+
+    // Kiểm tra giá bán không được nhỏ hơn giá gốc
+    if (salePrice && Number(salePrice) < Number(basePrice)) {
+      return res.status(400).json({ success: false, message: "Giá bán không được nhỏ hơn giá gốc." });
+    }
+
+    // Kiểm tra sale discount: giá sau sale không được nhỏ hơn giá gốc
+    if (saleDiscount) {
+      const discountPercent = Number(saleDiscount);
+      const baseForDiscount = Number(salePrice || basePrice);
+      const finalPrice = baseForDiscount * (1 - discountPercent / 100);
+      if (finalPrice < Number(basePrice)) {
+        return res.status(400).json({
+          success: false,
+          message: `Giá sau khi giảm (${Math.round(finalPrice)}) không được nhỏ hơn giá gốc (${basePrice}).`
+        });
+      }
+    }
 
     // Tạo slug từ name
     const slug = slugify(name);
 
-    // Kiểm tra slug đã tồn tại chưa
-    const existing = await Product.findOne({ slug });
+    // Kiểm tra slug đã tồn tại chưa (chỉ check những sản phẩm chưa xóa)
+    const existing = await Product.findOne({ slug, deletedAt: null });
     if (existing) {
       return res.status(409).json({ success: false, message: "Sản phẩm với tên này đã tồn tại." });
     }
 
-    // Xử lý ảnh từ Cloudinary (req.files từ uploadProductImages middleware)
-    const images = (req.files || []).map((file, index) => ({
-      url:       file.path,
-      publicId:  file.filename,
-      isPrimary: index === 0,
-    }));
-
     const product = await Product.create({
       name, slug, description, category, basePrice,
       salePrice: salePrice || null,
+      saleDiscount: saleDiscount || null,
       stock:     stock || 0,
       tags:      tags || [],
-      images,
+      images:    images || [],
     });
 
     console.info(`[AUDIT] Admin ${req.user.id} created product ${product._id} at ${new Date().toISOString()}`);
@@ -351,35 +361,58 @@ exports.createProduct = async (req, res, next) => {
 exports.updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, category, basePrice, salePrice, stock, tags, isActive } = req.body;
+    const { name, description, category, basePrice, salePrice, saleDiscount, stock, tags, isActive, images } = req.body;
 
     const product = await Product.findOne({ _id: id, deletedAt: null });
     if (!product) {
       return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại." });
     }
 
+    // Kiểm tra giá bán không được nhỏ hơn giá gốc
+    const finalBasePrice = basePrice !== undefined ? basePrice : product.basePrice;
+    if (salePrice && Number(salePrice) < Number(finalBasePrice)) {
+      return res.status(400).json({ success: false, message: "Giá bán không được nhỏ hơn giá gốc." });
+    }
+
+    // Kiểm tra sale discount: giá sau sale không được nhỏ hơn giá gốc
+    if (saleDiscount !== undefined && saleDiscount !== null) {
+      const discountPercent = Number(saleDiscount);
+      const finalSalePrice = salePrice !== undefined ? salePrice : product.salePrice;
+      const baseForDiscount = finalSalePrice || finalBasePrice;
+      const finalPrice = baseForDiscount * (1 - discountPercent / 100);
+      if (finalPrice < finalBasePrice) {
+        return res.status(400).json({
+          success: false,
+          message: `Giá sau khi giảm (${Math.round(finalPrice)}) không được nhỏ hơn giá gốc (${finalBasePrice}).`
+        });
+      }
+    }
+
     // Whitelist field được phép update
     const updateData = {};
     if (name        !== undefined) {
+      const newSlug = slugify(name);
+      // Kiểm tra slug mới có bị trùng không (chỉ check những sản phẩm chưa xóa)
+      const conflict = await Product.findOne({
+        slug: newSlug,
+        _id: { $ne: id },
+        deletedAt: null,
+      });
+      if (conflict) {
+        return res.status(409).json({ success: false, message: "Tên sản phẩm này đã tồn tại." });
+      }
       updateData.name = name;
-      updateData.slug = slugify(name);
+      updateData.slug = newSlug;
     }
     if (description !== undefined) updateData.description = description;
     if (category    !== undefined) updateData.category    = category;
     if (basePrice   !== undefined) updateData.basePrice   = basePrice;
     if (salePrice   !== undefined) updateData.salePrice   = salePrice;
+    if (saleDiscount!== undefined) updateData.saleDiscount= saleDiscount;
     if (stock       !== undefined) updateData.stock       = stock;
     if (tags        !== undefined) updateData.tags        = tags;
     if (isActive    !== undefined) updateData.isActive    = isActive;
-
-    // Ảnh mới nếu có upload
-    if (req.files?.length > 0) {
-      updateData.images = req.files.map((file, index) => ({
-        url:       file.path,
-        publicId:  file.filename,
-        isPrimary: index === 0,
-      }));
-    }
+    if (images      !== undefined) updateData.images      = images;
 
     const updated = await Product.findByIdAndUpdate(
       id,

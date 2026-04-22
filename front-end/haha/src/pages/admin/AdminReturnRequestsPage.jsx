@@ -23,7 +23,10 @@ function ReturnRow({ req, onAction }) {
   const handleAction = async (action) => {
     setProcessing(true);
     try {
-      await axiosClient.patch(`/api/orders/returns/${req._id}`, { status: action });
+      const endpoint = action === "Approved"
+        ? `/api/orders/returns/${req._id}/approve`
+        : `/api/orders/returns/${req._id}/reject`;
+      await axiosClient.patch(endpoint);
       onAction(req._id, action);
       toast.success(action === "Approved" ? "Đã chấp nhận hoàn hàng" : "Đã từ chối hoàn hàng");
     } catch (err) {
@@ -131,7 +134,7 @@ export default function AdminReturnRequestsPage() {
     if (status) params.set("status", status);
     axiosClient.get(`/api/orders/returns?${params}`)
       .then((r) => {
-        setRequests(r.data.data?.returns || []);
+        setRequests(r.data.data?.requests || []);
         setTotalPages(r.data.data?.pagination?.totalPages || 1);
         setTotal(r.data.data?.pagination?.total || 0);
       })
