@@ -16,6 +16,18 @@ const slugify = (str) =>
 // ─── 6.1 Get All ──────────────────────────────────────────────────────────────
 // GET /api/categories
 // Public — chỉ trả danh mục active, sort theo sortOrder
+exports.getAllAdmin = async (req, res, next) => {
+  try {
+    const categories = await Category.find({ deletedAt: null })
+      .select("-__v")
+      .populate("parent", "name slug")
+      .sort({ sortOrder: 1, createdAt: 1 });
+    return res.status(200).json({ success: true, data: categories });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getAll = async (req, res, next) => {
   try {
     const categories = await Category.find({ isActive: true, deletedAt: null })

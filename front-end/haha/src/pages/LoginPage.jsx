@@ -42,9 +42,27 @@ export default function LoginPage() {
     return e;
   };
 
+  const validateField = (name, value) => {
+    if (name === "email") {
+      if (!value.trim()) return "Vui lòng nhập email.";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Email không hợp lệ.";
+    }
+    if (name === "password") {
+      if (!value) return "Vui lòng nhập mật khẩu.";
+    }
+    return undefined;
+  };
+
   const handleChange = (e) => {
-    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-    setErrors((err) => ({ ...err, [e.target.name]: undefined }));
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+    if (errors[name]) setErrors((err) => ({ ...err, [name]: validateField(name, value) }));
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const err = validateField(name, value);
+    if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   };
 
   const handleSubmit = async (e) => {
@@ -127,6 +145,7 @@ export default function LoginPage() {
                     autoComplete="email"
                     value={form.email}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     placeholder="you@example.com"
                     className={`w-full rounded-xl border bg-[#fafafa] px-4 py-3 text-[14px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:bg-white focus:ring-2 focus:ring-[#0071e3]/30 ${
                       errors.email
@@ -165,6 +184,7 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       value={form.password}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       placeholder="••••••••"
                       className={`w-full rounded-xl border bg-[#fafafa] px-4 py-3 pr-11 text-[14px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:bg-white focus:ring-2 focus:ring-[#0071e3]/30 ${
                         errors.password

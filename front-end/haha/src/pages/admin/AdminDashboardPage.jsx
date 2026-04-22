@@ -23,15 +23,12 @@ const ORDER_STATUS_COLOR = {
 const ORDER_STATUS_VN = { Pending:"Chờ xác nhận", Confirmed:"Đã xác nhận", Shipped:"Đang giao", Delivered:"Đã giao", Cancelled:"Đã huỷ" };
 
 /* ── Stat Card ── */
-function StatCard({ icon, label, value, sub, color }) {
+function StatCard({ label, value, sub }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl ${color}`}>{icon}</div>
-      <div>
-        <p className="text-[12px] text-[#8e8e93]">{label}</p>
-        <p className="text-[22px] font-bold text-[#1d1d1f] leading-none mt-0.5">{value}</p>
-        {sub && <p className="text-[11px] text-[#6e6e73] mt-0.5">{sub}</p>}
-      </div>
+    <div className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+      <p className="text-[12px] text-[#8e8e93]">{label}</p>
+      <p className="text-[22px] font-bold text-[#1d1d1f] leading-none mt-0.5">{value}</p>
+      {sub && <p className="text-[11px] text-[#6e6e73] mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -116,10 +113,10 @@ export default function AdminDashboardPage() {
 
       {/* ── Stat cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon="💰" label="Doanh thu" value={fmt(overview?.totalRevenue || 0)} color="bg-[#fff7ed]" />
-        <StatCard icon="📦" label="Đơn hàng" value={fmtNum(overview?.orderCount || 0)} sub="Tổng tất cả" color="bg-[#eff6ff]" />
-        <StatCard icon="🛍️" label="Sản phẩm" value={fmtNum(overview?.productCount || 0)} sub="Đang kinh doanh" color="bg-[#f0fdf4]" />
-        <StatCard icon="👤" label="Người dùng" value={fmtNum(overview?.userCount || 0)} sub="Đã đăng ký" color="bg-[#fdf4ff]" />
+        <StatCard label="Doanh thu" value={fmt(overview?.totalRevenue || 0)} />
+        <StatCard label="Đơn hàng" value={fmtNum(overview?.orderCount || 0)} sub="Tổng tất cả" />
+        <StatCard label="Sản phẩm" value={fmtNum(overview?.productCount || 0)} sub="Đang kinh doanh" />
+        <StatCard label="Người dùng" value={fmtNum(overview?.userCount || 0)} sub="Đã đăng ký" />
       </div>
 
       {/* ── Revenue + Low stock ── */}

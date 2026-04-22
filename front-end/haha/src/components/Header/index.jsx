@@ -55,8 +55,9 @@ function useHeaderState() {
     : user?.email?.[0]?.toUpperCase() ?? null;
 
   const userName = user?.name?.split(" ").pop() || null;
+  const isAdmin = user?.role === "admin";
 
-  return { cartCount, user, isLoggedIn, userInitial, userName };
+  return { cartCount, user, isLoggedIn, userInitial, userName, isAdmin };
 }
 
 /* ─── Notification Bell ──────────────────────────────────────────── */
@@ -202,7 +203,7 @@ function NotificationBell({ size = 13 }) {
 }
 
 /* ─── UserCartControls — dùng chung ở 2 nơi ─────────────────────── */
-function UserCartControls({ size = 13, isLoggedIn, userInitial, userName, cartCount, textVisible = true }) {
+function UserCartControls({ size = 13, isLoggedIn, isAdmin, userInitial, userName, cartCount, textVisible = true }) {
   const navigate = useNavigate();
   return (
     <div className="flex items-center gap-4">
@@ -230,36 +231,53 @@ function UserCartControls({ size = 13, isLoggedIn, userInitial, userName, cartCo
       {/* Notification Bell — chỉ hiện khi đã đăng nhập */}
       {isLoggedIn && <NotificationBell size={size} />}
 
-      {/* Cart */}
-      <Link
-        to="/cart"
-        className="relative flex items-center gap-1.5 text-[#1d1d1f] hover:text-[#0071e3] transition-colors"
-        style={{ fontSize: "12px", fontWeight: 500 }}
-      >
-        <span className="relative">
-          <CartIcon size={size} />
-          <AnimatePresence>
-            {cartCount > 0 && (
-              <motion.span
-                key={cartCount}
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#e53e3e] text-[9px] font-bold text-white"
-              >
-                {cartCount > 9 ? "9+" : cartCount}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </span>
-        {textVisible && <span className="hidden sm:inline">Giỏ hàng</span>}
-      </Link>
+      {/* Dashboard (admin) hoặc Cart (user) */}
+      {isAdmin ? (
+        <Link
+          to="/admin"
+          className="flex items-center gap-1.5 text-[#1d1d1f] hover:text-[#0071e3] transition-colors"
+          style={{ fontSize: "12px", fontWeight: 500 }}
+          title="Dashboard"
+        >
+          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+          </svg>
+          {textVisible && <span className="hidden sm:inline">Dashboard</span>}
+        </Link>
+      ) : (
+        <Link
+          to="/cart"
+          className="relative flex items-center gap-1.5 text-[#1d1d1f] hover:text-[#0071e3] transition-colors"
+          style={{ fontSize: "12px", fontWeight: 500 }}
+        >
+          <span className="relative">
+            <CartIcon size={size} />
+            <AnimatePresence>
+              {cartCount > 0 && (
+                <motion.span
+                  key={cartCount}
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#e53e3e] text-[9px] font-bold text-white"
+                >
+                  {cartCount > 9 ? "9+" : cartCount}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </span>
+          {textVisible && <span className="hidden sm:inline">Giỏ hàng</span>}
+        </Link>
+      )}
     </div>
   );
 }
 
 /* ─── Announcement Bar (top, không sticky) ───────────────────────── */
-function AnnouncementBar({ cartCount, isLoggedIn, userInitial }) {
+function AnnouncementBar({ cartCount, isLoggedIn, isAdmin, userInitial }) {
   return (
     <div className="w-full bg-[#fafafa] border-b border-black/[0.04]">
       <div className="max-w-[1200px] mx-auto px-6 md:px-8 py-2 flex items-center justify-between">
@@ -277,10 +295,11 @@ function AnnouncementBar({ cartCount, isLoggedIn, userInitial }) {
           <span>Hỗ trợ 24/7</span>
         </div>
 
-        {/* Right: User + Cart */}
+        {/* Right: User + Cart/Dashboard */}
         <UserCartControls
           cartCount={cartCount}
           isLoggedIn={isLoggedIn}
+          isAdmin={isAdmin}
           userInitial={userInitial}
           textVisible={true}
         />
@@ -290,7 +309,7 @@ function AnnouncementBar({ cartCount, isLoggedIn, userInitial }) {
 }
 
 /* ─── Navbar (sticky) ────────────────────────────────────────────── */
-function Navbar({ scrolled, cartCount, isLoggedIn, userInitial }) {
+function Navbar({ scrolled, cartCount, isLoggedIn, isAdmin, userInitial }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -399,6 +418,7 @@ function Navbar({ scrolled, cartCount, isLoggedIn, userInitial }) {
                     size={14}
                     cartCount={cartCount}
                     isLoggedIn={isLoggedIn}
+                    isAdmin={isAdmin}
                     userInitial={userInitial}
                     textVisible={false}
                   />
@@ -480,6 +500,7 @@ function Navbar({ scrolled, cartCount, isLoggedIn, userInitial }) {
                   size={15}
                   cartCount={cartCount}
                   isLoggedIn={isLoggedIn}
+                  isAdmin={isAdmin}
                   userInitial={userInitial}
                   textVisible={true}
                 />
@@ -495,7 +516,7 @@ function Navbar({ scrolled, cartCount, isLoggedIn, userInitial }) {
 /* ─── Header ─────────────────────────────────────────────────────── */
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
-  const { cartCount, isLoggedIn, userInitial, userName } = useHeaderState();
+  const { cartCount, isLoggedIn, isAdmin, userInitial, userName } = useHeaderState();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 36);
@@ -508,6 +529,7 @@ export default function Header() {
       <AnnouncementBar
         cartCount={cartCount}
         isLoggedIn={isLoggedIn}
+        isAdmin={isAdmin}
         userInitial={userInitial}
         userName={userName}
       />
@@ -515,6 +537,7 @@ export default function Header() {
         scrolled={scrolled}
         cartCount={cartCount}
         isLoggedIn={isLoggedIn}
+        isAdmin={isAdmin}
         userInitial={userInitial}
         userName={userName}
       />

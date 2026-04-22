@@ -6,6 +6,7 @@ const Category      = require("../models/Category");
 const Banner        = require("../models/Banner");
 const FlashSale     = require("../models/FlashSale");
 const Notification  = require("../models/Notification");
+const Setting       = require("../models/Setting");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THỐNG KÊ
@@ -364,7 +365,9 @@ exports.banUser = require("./UserController").banUser;
 
 exports.getBanners = async (req, res, next) => {
   try {
-    const banners = await Banner.find({ deletedAt: null }).sort({ sortOrder: 1 });
+    const filter = { deletedAt: null };
+    if (req.query.position) filter.position = req.query.position;
+    const banners = await Banner.find(filter).sort({ sortOrder: 1 });
     return res.status(200).json({ success: true, data: banners });
   } catch (err) { next(err); }
 };
@@ -566,5 +569,44 @@ exports.deleteFlashSale = async (req, res, next) => {
 
     console.info(`[AUDIT] Admin ${req.user.id} deleted flash sale ${id}`);
     return res.status(200).json({ success: true, message: "Xóa flash sale thành công." });
+  } catch (err) { next(err); }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOMEPAGE LAYOUT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DEFAULT_LAYOUT = [
+  { key: "flashSale",       label: "Flash Sale",        visible: true,  order: 1 },
+  { key: "categories",      label: "Danh mục",          visible: true,  order: 2 },
+  { key: "newArrival",      label: "Hàng mới về",       visible: true,  order: 3 },
+  { key: "categoryShowcase",label: "Category Showcase",  visible: true,  order: 4 },
+  { key: "exploreProducts", label: "Khám phá sản phẩm", visible: true,  order: 5 },
+  { key: "services",        label: "Dịch vụ",           visible: true,  order: 6 },
+];
+
+// GET /api/admin/homepage-layout  &  GET /api/settings/homepage-layout (public)
+exports.getHomepageLayout = async (req, res, next) => {
+  try {
+    const setting = await Setting.findOne({ key: "homepage_layout" });
+    const sections = setting ? setting.value : DEFAULT_LAYOUT;
+    return res.status(200).json({ success: true, data: sections });
+  } catch (err) { next(err); }
+};
+
+// PUT /api/admin/homepage-layout
+exports.updateHomepageLayout = async (req, res, next) => {
+  try {
+    const { sections } = req.body;
+    if (!Array.isArray(sections)) {
+      return res.status(400).json({ success: false, message: "sections phải là array." });
+    }
+    await Setting.findOneAndUpdate(
+      { key: "homepage_layout" },
+      { value: sections },
+      { upsert: true, new: true }
+    );
+    console.info(`[AUDIT] Admin ${req.user.id} updated homepage layout`);
+    return res.status(200).json({ success: true, message: "Đã cập nhật layout trang chủ." });
   } catch (err) { next(err); }
 };

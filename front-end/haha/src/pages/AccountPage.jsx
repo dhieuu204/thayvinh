@@ -576,7 +576,11 @@ export default function AccountPage() {
 
               {/* Nav */}
               <nav className="p-2">
-                {NAV_ITEMS.map((item) =>
+                {NAV_ITEMS.filter((item) =>
+                  user?.role === "admin"
+                    ? !["loyalty", "orders", "wishlist"].includes(item.key)
+                    : true
+                ).map((item) =>
                   item.link ? (
                     <Link
                       key={item.key}

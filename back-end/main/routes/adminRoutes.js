@@ -1,6 +1,7 @@
 const express          = require("express");
 const router           = express.Router();
-const AdminController  = require("../controllers/AdminController");
+const AdminController      = require("../controllers/AdminController");
+const CategoryController   = require("../controllers/categoryController");
 const { authenticate, authorizeAdmin } = require("../middleware/authMiddleware");
 
 const guard = [authenticate, authorizeAdmin];
@@ -27,6 +28,13 @@ router.get("/banners",        ...guard, AdminController.getBanners);
 router.post("/banners",       ...guard, AdminController.createBanner);
 router.put("/banners/:id",    ...guard, AdminController.updateBanner);
 router.delete("/banners/:id", ...guard, AdminController.deleteBanner);
+
+// ── Quản lý danh mục (all, kể cả inactive) ───────────────────────────────────
+router.get("/categories", ...guard, CategoryController.getAllAdmin);
+
+// ── Homepage layout ───────────────────────────────────────────────────────────
+router.get("/homepage-layout",  ...guard, AdminController.getHomepageLayout);
+router.put("/homepage-layout",  ...guard, AdminController.updateHomepageLayout);
 
 // ── Quản lý flash sale ────────────────────────────────────────────────────────
 router.get("/flash-sales",                              ...guard, AdminController.getFlashSales);

@@ -12,43 +12,57 @@ function formatCurrency(amount) {
   }).format(amount);
 }
 
-/* ─── Countdown ─────────────────────────────────────────────────── */
-function getSecondsUntil(target) {
-  return Math.max(0, Math.floor((new Date(target) - Date.now()) / 1000));
-}
-
-function formatTime(seconds) {
-  const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
-  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const s = String(seconds % 60).padStart(2, "0");
-  return { h, m, s };
-}
-
-function CountdownUnit({ value }) {
+/* ─── Countdown display ─────────────────────────────────────────── */
+function TimeUnit({ value, label }) {
   return (
-    <span className="flex h-9 min-w-[36px] items-center justify-center rounded-lg bg-[#1d1d1f] px-1.5 text-[20px] font-bold tabular-nums text-white shadow-sm">
-      {value}
-    </span>
-  );
-}
-
-function Countdown({ endsAt }) {
-  const [secs, setSecs] = useState(() => getSecondsUntil(endsAt));
-  useEffect(() => {
-    setSecs(getSecondsUntil(endsAt));
-    const id = setInterval(() => setSecs(getSecondsUntil(endsAt)), 1000);
-    return () => clearInterval(id);
-  }, [endsAt]);
-  const { h, m, s } = formatTime(secs);
-  return (
-    <div className="flex items-center gap-1">
-      <CountdownUnit value={h} />
-      <span className="text-lg font-bold text-[#1d1d1f]">:</span>
-      <CountdownUnit value={m} />
-      <span className="text-lg font-bold text-[#1d1d1f]">:</span>
-      <CountdownUnit value={s} />
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="flex h-8 min-w-[32px] items-center justify-center rounded-lg bg-[#1d1d1f] px-1.5 text-[15px] font-bold tabular-nums text-white">
+        {value}
+      </span>
+      <span className="text-[9px] font-medium text-[#8e8e93] uppercase tracking-wide">{label}</span>
     </div>
   );
+}
+
+function EndDate({ endsAt }) {
+  const [remaining, setRemaining] = useState(0);
+
+  useEffect(() => {
+    const calc = () => Math.max(0, Math.floor((new Date(endsAt) - Date.now()) / 1000));
+    setRemaining(calc());
+    const id = setInterval(() => setRemaining(calc()), 1000);
+    return () => clearInterval(id);
+  }, [endsAt]);
+
+  if (!endsAt) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  const d = Math.floor(remaining / 86400);
+  const h = Math.floor((remaining % 86400) / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
+
+  return (
+    <div className="flex items-end gap-1">
+      {d > 0 && (
+        <>
+          <TimeUnit value={d} label="ngày" />
+          <span className="mb-3.5 text-[13px] font-bold text-[#8e8e93]">:</span>
+        </>
+      )}
+      <TimeUnit value={pad(h)} label="giờ" />
+      <span className="mb-3.5 text-[13px] font-bold text-[#8e8e93]">:</span>
+      <TimeUnit value={pad(m)} label="phút" />
+      <span className="mb-3.5 text-[13px] font-bold text-[#8e8e93]">:</span>
+      <TimeUnit value={pad(s)} label="giây" />
+    </div>
+  );
+}
+
+function fmtDate(d) {
+  if (!d) return "--/--/----";
+  const t = new Date(d);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()}`;
 }
 
 /* ─── Flame icon ────────────────────────────────────────────────── */
@@ -172,6 +186,7 @@ function CarouselArrow({ left, onClick }) {
 export default function FlashSale() {
   const [products, setProducts] = useState([]);
   const [endsAt, setEndsAt] = useState(null);
+  const [startsAt, setStartsAt] = useState(null);
   const trackRef = useRef(null);
 
   useEffect(() => {
@@ -183,11 +198,15 @@ export default function FlashSale() {
           const flatProducts = [];
           let soonest = null;
 
+          let soonestStart = null;
           data.forEach((flashSale) => {
             if (new Date(flashSale.endsAt) < (soonest ? new Date(soonest) : new Date())) {
               soonest = flashSale.endsAt;
             } else if (!soonest) {
               soonest = flashSale.endsAt;
+            }
+            if (!soonestStart || new Date(flashSale.startsAt) < new Date(soonestStart)) {
+              soonestStart = flashSale.startsAt;
             }
 
             flashSale.products?.forEach((item) => {
@@ -208,6 +227,7 @@ export default function FlashSale() {
           console.log("[FlashSale] Soonest end:", soonest);
           setProducts(flatProducts);
           if (soonest) setEndsAt(new Date(soonest));
+          if (soonestStart) setStartsAt(new Date(soonestStart));
         } else {
           console.log("[FlashSale] No flash sales data or empty array");
         }
@@ -237,39 +257,22 @@ export default function FlashSale() {
 
           <div className="h-7 w-px bg-black/[0.08]" />
 
-          {/* Countdown */}
+          {/* End date */}
           <div className="flex flex-col items-start gap-1">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-[#8e8e93]">
-              Kết thúc trong
+              Thời gian còn lại
             </span>
-            <Countdown endsAt={endsAt} />
+            <EndDate endsAt={endsAt} />
           </div>
 
           <div className="h-7 w-px bg-black/[0.08] hidden sm:block" />
 
-          {/* Session tabs — far right */}
+          {/* Session tab — far right */}
           <div className="ml-auto hidden sm:flex">
-            {[
-              { label: "Đang diễn ra", time: "09:00 - 23:59", active: true },
-              { label: "Ngày mai",     time: "09:00 - 23:59", active: false },
-            ].map((tab) => (
-              <button
-                key={tab.label}
-                type="button"
-                className={`flex cursor-pointer flex-col items-center px-6 py-1 transition-all duration-150 ${
-                  tab.active
-                    ? "border-b-2 border-[#f5c518]"
-                    : "border-b-2 border-transparent opacity-50 hover:opacity-75"
-                }`}
-              >
-                <span className="text-[12px] font-medium text-[#1d1d1f]">
-                  {tab.label}
-                </span>
-                <span className={`text-[14px] font-bold ${tab.active ? "text-[#1d1d1f]" : "text-[#6e6e73]"}`}>
-                  {tab.time}
-                </span>
-              </button>
-            ))}
+            <div className="flex flex-col items-center px-6 py-1 border-b-2 border-[#f5c518]">
+              <span className="text-[12px] font-medium text-[#1d1d1f]">Đang diễn ra</span>
+              <span className="text-[14px] font-bold text-[#1d1d1f]">{fmtDate(startsAt)} - {fmtDate(endsAt)}</span>
+            </div>
           </div>
         </div>
 

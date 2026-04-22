@@ -218,24 +218,59 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Điền sẵn thông tin nếu đã đăng nhập
+  // Điền sẵn thông tin từ API profile
   useEffect(() => {
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      if (user.email)
+    axiosClient.get("/api/users/profile")
+      .then(({ data }) => {
+        const u = data.data || data.user || data;
         setForm((f) => ({
           ...f,
-          email: user.email,
-          fullName: user.name || user.fullName || "",
-          phone: user.phone || user.phoneNumber || "",
+          email:    u.email    || f.email,
+          fullName: u.fullName || u.name || f.fullName,
+          phone:    u.phone    || u.phoneNumber || f.phone,
+          address:  u.address  || f.address,
         }));
-    } catch {}
+      })
+      .catch(() => {
+        // fallback localStorage
+        try {
+          const u = JSON.parse(localStorage.getItem("user") || "{}");
+          if (u.email)
+            setForm((f) => ({
+              ...f,
+              email:    u.email,
+              fullName: u.name || u.fullName || f.fullName,
+              phone:    u.phone || u.phoneNumber || f.phone,
+            }));
+        } catch {}
+      });
   }, []);
+
+  const VALID_NAME  = /^[\p{L}\s'-]+$/u;
+  const VALID_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const validateField = (name, value) => {
+    if (name === "fullName") {
+      if (!value.trim()) return "Vui lòng nhập họ tên.";
+      if (!VALID_NAME.test(value.trim())) return "Họ tên không được chứa số hoặc ký tự đặc biệt.";
+    }
+    if (name === "email") {
+      if (!value.trim()) return "Vui lòng nhập email.";
+      if (!VALID_EMAIL.test(value)) return "Email không hợp lệ.";
+    }
+    return undefined;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
-    setErrors((err) => ({ ...err, [name]: undefined }));
+    if (errors[name]) setErrors((err) => ({ ...err, [name]: validateField(name, value) }));
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const err = validateField(name, value);
+    if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   };
 
   const handleApplyVoucher = useCallback(async () => {
@@ -372,6 +407,7 @@ export default function CheckoutPage() {
                       name="fullName"
                       value={form.fullName}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       placeholder="Nguyễn Văn A"
                       autoComplete="name"
                       className={inputCls(errors.fullName)}
@@ -398,6 +434,7 @@ export default function CheckoutPage() {
                       name="email"
                       value={form.email}
                       onChange={handleChange}
+                      onBlur={handleBlur}
                       placeholder="you@example.com"
                       autoComplete="email"
                       className={`${inputCls(errors.email)} sm:col-span-2`}

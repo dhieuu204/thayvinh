@@ -44,8 +44,8 @@ function useProductForm(product) {
     const e = {};
     if (!form.name.trim()) e.name = "Vui lòng nhập tên sản phẩm";
     if (!form.basePrice || Number(form.basePrice) <= 0) e.basePrice = "Giá phải lớn hơn 0";
-    if (form.salePrice && Number(form.salePrice) < Number(form.basePrice)) {
-      e.salePrice = "Giá bán không được nhỏ hơn giá gốc";
+    if (form.salePrice && Number(form.salePrice) >= Number(form.basePrice)) {
+      e.salePrice = "Giá khuyến mãi phải nhỏ hơn giá gốc";
     }
     if (form.saleDiscount) {
       const discountPercent = Number(form.saleDiscount);
@@ -155,7 +155,7 @@ function ProductDrawer({ categories, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá bán (VNĐ) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá khuyến mãi (VNĐ) <span className="text-[#8e8e93]">(phải nhỏ hơn giá gốc)</span></label>
               <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Để trống nếu không giảm giá" className={inputCls(errors.salePrice)} />
               {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
             </div>
@@ -298,7 +298,7 @@ function ProductModal({ product, categories, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá bán (VND) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá khuyến mãi (VND) <span className="text-[#8e8e93]">(phải nhỏ hơn giá gốc)</span></label>
             <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Để trống nếu không giảm giá" className={inputCls(errors.salePrice)} />
             {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
           </div>

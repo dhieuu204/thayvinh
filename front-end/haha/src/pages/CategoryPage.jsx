@@ -118,10 +118,21 @@ export default function CategoryPage() {
   const [loading, setLoading] = useState(true);
   const [seriesFilters, setSeriesFilters] = useState([]);
   const [activeFilter, setActiveFilter] = useState(null);
+  const [banners, setBanners] = useState([]);
+  const [bannerIdx, setBannerIdx] = useState(0);
 
   useEffect(() => {
     if (!meta) navigate("/not-found", { replace: true });
   }, [meta, navigate]);
+
+  useEffect(() => {
+    if (!slug) return;
+    setBannerIdx(0);
+    fetch(`${API_URL}/api/banners?position=${slug}&isActive=true`)
+      .then((r) => r.json())
+      .then((json) => setBanners((json.data || []).filter((b) => b.isActive)))
+      .catch(() => {});
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -186,21 +197,44 @@ export default function CategoryPage() {
             <h1 className="text-[32px] font-semibold tracking-tight leading-none">{meta.name}</h1>
           </div> */}
 
-          {/* Banner Slider Mockup */}
-          <div className="relative w-full rounded-2xl overflow-hidden mb-8 group cursor-pointer bg-white border border-black/[0.04]">
-            <img 
-              src="https://shopdunk.com/images/uploaded/banner-thang-4/homepage/banner%20iP17promax_PC.png" 
-              alt="Category Banner" 
-              className="w-full h-auto block"
-            />
-            {/* Arrows */}
-            <div className="absolute top-1/2 left-4 -translate-y-1/2 w-10 h-10 bg-white/80 text-[#1d1d1f] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-black/10 shadow-sm">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+          {/* Banner Slider */}
+          {banners.length > 0 ? (
+            <div className="relative w-full rounded-2xl overflow-hidden mb-8 group bg-white border border-black/[0.04]">
+              {banners[bannerIdx].linkUrl ? (
+                <a href={banners[bannerIdx].linkUrl}>
+                  <img src={banners[bannerIdx].imageUrl} alt={banners[bannerIdx].title} className="w-full h-auto block" />
+                </a>
+              ) : (
+                <img src={banners[bannerIdx].imageUrl} alt={banners[bannerIdx].title} className="w-full h-auto block" />
+              )}
+              {banners.length > 1 && (
+                <>
+                  <button type="button" onClick={() => setBannerIdx((i) => (i - 1 + banners.length) % banners.length)}
+                    className="absolute top-1/2 left-4 -translate-y-1/2 w-10 h-10 bg-white/80 text-[#1d1d1f] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-black/10 shadow-sm">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <button type="button" onClick={() => setBannerIdx((i) => (i + 1) % banners.length)}
+                    className="absolute top-1/2 right-4 -translate-y-1/2 w-10 h-10 bg-white/80 text-[#1d1d1f] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-black/10 shadow-sm">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {banners.map((_, i) => (
+                      <button key={i} type="button" onClick={() => setBannerIdx(i)}
+                        className={`h-1.5 rounded-full transition-all ${i === bannerIdx ? "w-5 bg-white" : "w-1.5 bg-white/50"}`} />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-            <div className="absolute top-1/2 right-4 -translate-y-1/2 w-10 h-10 bg-white/80 text-[#1d1d1f] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-black/10 shadow-sm">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+          ) : (
+            <div className="relative w-full rounded-2xl overflow-hidden mb-8 group cursor-pointer bg-white border border-black/[0.04]">
+              <img
+                src="https://shopdunk.com/images/uploaded/banner-thang-4/homepage/banner%20iP17promax_PC.png"
+                alt="Category Banner"
+                className="w-full h-auto block"
+              />
             </div>
-          </div>
+          )}
 
           {/* Filter Bar */}
           {seriesFilters.length > 0 && (

@@ -19,6 +19,8 @@ const reviewRoutes       = require("./routes/reviewRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const shippingRoutes     = require("./routes/shippingRoutes");
 const imageRoutes        = require("./routes/imageRoutes");
+const bannerRoutes       = require("./routes/bannerRoutes");
+const settingsRoutes     = require("./routes/settingsRoutes");
 
 const app = express();
 
@@ -57,6 +59,8 @@ app.use("/api/reviews",       reviewRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/shipping",      shippingRoutes);
 app.use("/api/images",        imageRoutes);
+app.use("/api/banners",       bannerRoutes);
+app.use("/api/settings",      settingsRoutes);
 
 // ── Global error handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

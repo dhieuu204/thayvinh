@@ -84,26 +84,53 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const VALID_NAME  = /^[\p{L}\s'-]+$/u;
+  const VALID_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const validateField = (name, value) => {
+    if (name === "name") {
+      if (!value.trim()) return "Vui lòng nhập họ tên.";
+      if (!VALID_NAME.test(value.trim())) return "Họ tên không được chứa số hoặc ký tự đặc biệt.";
+    }
+    if (name === "email") {
+      if (!value.trim()) return "Vui lòng nhập email.";
+      if (!VALID_EMAIL.test(value)) return "Email không hợp lệ.";
+    }
+    if (name === "password") {
+      if (!value) return "Vui lòng nhập mật khẩu.";
+      if (value.length < 6) return "Mật khẩu phải có ít nhất 6 ký tự.";
+    }
+    if (name === "confirmPassword") {
+      if (!value) return "Vui lòng xác nhận mật khẩu.";
+      if (value !== form.password) return "Mật khẩu xác nhận không khớp.";
+    }
+    return undefined;
+  };
+
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name = "Vui lòng nhập họ tên.";
-    if (!form.email.trim()) e.email = "Vui lòng nhập email.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      e.email = "Email không hợp lệ.";
-    if (!form.password) e.password = "Vui lòng nhập mật khẩu.";
-    else if (form.password.length < 6)
-      e.password = "Mật khẩu phải có ít nhất 6 ký tự.";
-    if (!form.confirmPassword)
-      e.confirmPassword = "Vui lòng xác nhận mật khẩu.";
-    else if (form.password !== form.confirmPassword)
-      e.confirmPassword = "Mật khẩu xác nhận không khớp.";
+    const nameErr = validateField("name", form.name);
+    if (nameErr) e.name = nameErr;
+    const emailErr = validateField("email", form.email);
+    if (emailErr) e.email = emailErr;
+    const passErr = validateField("password", form.password);
+    if (passErr) e.password = passErr;
+    const confirmErr = validateField("confirmPassword", form.confirmPassword);
+    if (confirmErr) e.confirmPassword = confirmErr;
     if (!agreed) e.agreed = "Bạn cần đồng ý với điều khoản sử dụng.";
     return e;
   };
 
   const handleChange = (e) => {
-    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-    setErrors((err) => ({ ...err, [e.target.name]: undefined }));
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+    if (errors[name]) setErrors((err) => ({ ...err, [name]: validateField(name, value) }));
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const err = validateField(name, value);
+    if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   };
 
   const handleSubmit = async (e) => {
@@ -190,6 +217,7 @@ export default function SignUpPage() {
                     autoComplete="name"
                     value={form.name}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     placeholder="Nguyễn Văn A"
                     className={`w-full rounded-xl border bg-[#fafafa] px-4 py-3 text-[14px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:bg-white focus:ring-2 focus:ring-[#0071e3]/30 ${
                       errors.name
@@ -217,6 +245,7 @@ export default function SignUpPage() {
                     autoComplete="email"
                     value={form.email}
                     onChange={handleChange}
+                    onBlur={handleBlur}
                     placeholder="you@example.com"
                     className={`w-full rounded-xl border bg-[#fafafa] px-4 py-3 text-[14px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:bg-white focus:ring-2 focus:ring-[#0071e3]/30 ${
                       errors.email

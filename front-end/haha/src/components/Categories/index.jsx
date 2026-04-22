@@ -29,14 +29,14 @@ export default function Categories() {
         </div> */}
 
         <motion.div
-          className="grid grid-cols-3 gap-2 sm:grid-cols-6"
+          className="flex flex-wrap justify-center gap-2"
           variants={staggerContainer}
           initial="initial"
           whileInView="whileInView"
           viewport={{ once: true }}
         >
           {categories.map((item) => (
-            <motion.div key={item._id} variants={staggerItem}>
+            <motion.div key={item._id} variants={staggerItem} className="w-[calc(50%-4px)] sm:w-44 shrink-0">
               <Link
                 to={`/categories/${item.slug}`}
                 className="bg-[#fbfbfd] rounded-[24px] overflow-hidden hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-500 cursor-pointer group flex flex-col h-[220px] block"

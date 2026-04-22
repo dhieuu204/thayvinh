@@ -37,6 +37,8 @@ import AdminCategoriesPage from "./pages/admin/AdminCategoriesPage";
 import AdminVouchersPage from "./pages/admin/AdminVouchersPage";
 import AdminFlashSalesPage from "./pages/admin/AdminFlashSalesPage";
 import AdminReturnRequestsPage from "./pages/admin/AdminReturnRequestsPage";
+import AdminBannersPage from "./pages/admin/AdminBannersPage";
+import AdminHomepageSettingsPage from "./pages/admin/AdminHomepageSettingsPage";
 
 /** Chặn route khi chưa đăng nhập → redirect /login */
 const AuthRoute = ({ children }) => {
@@ -94,6 +96,8 @@ function App() {
           <Route path="vouchers"   element={<AdminVouchersPage />} />
           <Route path="flash-sales" element={<AdminFlashSalesPage />} />
           <Route path="returns"    element={<AdminReturnRequestsPage />} />
+          <Route path="banners"             element={<AdminBannersPage />} />
+          <Route path="homepage-settings"  element={<AdminHomepageSettingsPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
