@@ -62,6 +62,16 @@ const NAV_ITEMS = [
     ),
     link: "/wishlist",
   },
+  {
+    key: "addresses",
+    label: "Sổ địa chỉ",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    ),
+  },
 ];
 
 /* ─── Input field helper ─────────────────────────────────────────── */
@@ -187,7 +197,7 @@ function ProfileTab({ user, onSave }) {
       onSave(updated);
       toast.success("Cập nhật thông tin thành công!");
     } catch {
-      toast.success("Cập nhật thông tin thành công!"); // mock
+      toast.error("Cập nhật thông tin thất bại. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -491,6 +501,290 @@ function LoyaltyTab() {
   );
 }
 
+/* ─── Address Form Modal ─────────────────────────────────────────── */
+const EMPTY_ADDR = { fullName: "", phone: "", province: "", district: "", ward: "", street: "", isDefault: false };
+
+function AddressFormModal({ initial, onClose, onSaved }) {
+  const [form, setForm] = useState(initial ?? EMPTY_ADDR);
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const isEdit = !!initial?._id;
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
+    setErrors((er) => ({ ...er, [name]: undefined }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!form.fullName.trim()) errs.fullName = "Vui lòng nhập họ tên.";
+    if (!form.phone.trim()) errs.phone = "Vui lòng nhập số điện thoại.";
+    else if (!/^0\d{9}$/.test(form.phone.trim())) errs.phone = "Số điện thoại không hợp lệ.";
+    if (!form.province.trim()) errs.province = "Vui lòng nhập tỉnh/thành.";
+    if (!form.district.trim()) errs.district = "Vui lòng nhập quận/huyện.";
+    if (!form.ward.trim()) errs.ward = "Vui lòng nhập phường/xã.";
+    if (!form.street.trim()) errs.street = "Vui lòng nhập địa chỉ cụ thể.";
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    setSaving(true);
+    try {
+      if (isEdit) {
+        await axiosClient.put(`/api/users/addresses/${initial._id}`, form);
+      } else {
+        await axiosClient.post("/api/users/addresses", form);
+      }
+      toast.success(isEdit ? "Đã cập nhật địa chỉ." : "Đã thêm địa chỉ.");
+      onSaved();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Không thể lưu địa chỉ.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addrFields = [
+    { name: "fullName", label: "Họ và tên người nhận", placeholder: "Nguyễn Văn A", colSpan: "" },
+    { name: "phone",    label: "Số điện thoại",        placeholder: "0912 345 678",  colSpan: "" },
+    { name: "province", label: "Tỉnh / Thành phố",     placeholder: "Hà Nội",        colSpan: "" },
+    { name: "district", label: "Quận / Huyện",          placeholder: "Cầu Giấy",      colSpan: "" },
+    { name: "ward",     label: "Phường / Xã",           placeholder: "Dịch Vọng",     colSpan: "" },
+    { name: "street",   label: "Địa chỉ cụ thể",        placeholder: "Số 1, Ngõ 2...", colSpan: "sm:col-span-2" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="text-[16px] font-semibold text-[#1d1d1f]">
+            {isEdit ? "Chỉnh sửa địa chỉ" : "Thêm địa chỉ mới"}
+          </h3>
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-[#8e8e93] hover:bg-[#f5f5f7] hover:text-[#1d1d1f] transition-all">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} noValidate className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {addrFields.map(({ name, label, placeholder, colSpan }) => (
+              <Field key={name} label={label} id={`addr-${name}`} error={errors[name]}>
+                <input
+                  id={`addr-${name}`}
+                  type="text"
+                  name={name}
+                  value={form[name]}
+                  onChange={handleChange}
+                  placeholder={placeholder}
+                  className={`${inputCls(errors[name])} ${colSpan ? "col-span-2" : ""}`}
+                />
+              </Field>
+            ))}
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2.5 pt-1">
+            <input
+              type="checkbox"
+              name="isDefault"
+              checked={form.isDefault}
+              onChange={handleChange}
+              className="h-4 w-4 rounded border-black/20 accent-[#1d1d1f]"
+            />
+            <span className="text-[13px] text-[#1d1d1f]">Đặt làm địa chỉ mặc định</span>
+          </label>
+
+          <div className="flex justify-end gap-2.5 pt-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-black/[0.1] px-5 py-2.5 text-[13px] font-medium text-[#1d1d1f] transition-all hover:bg-[#f5f5f7]">
+              Hủy
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.985 }}
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-[#1d1d1f] px-5 py-2.5 text-[13px] font-semibold text-white transition-all hover:bg-[#3d3d3f] disabled:opacity-60"
+            >
+              {saving ? "Đang lưu..." : isEdit ? "Cập nhật" : "Thêm địa chỉ"}
+            </motion.button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Tab: Address Book ──────────────────────────────────────────── */
+function AddressTab() {
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [showForm, setShowForm]   = useState(false);
+  const [editingAddr, setEditingAddr] = useState(null);
+  const [deletingId, setDeletingId]   = useState(null);
+
+  const fetchAddresses = () => {
+    setLoading(true);
+    axiosClient
+      .get("/api/users/addresses")
+      .then(({ data }) => setAddresses(data.data ?? []))
+      .catch(() => toast.error("Không thể tải danh sách địa chỉ."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchAddresses(); }, []);
+
+  const handleSaved = () => {
+    setShowForm(false);
+    setEditingAddr(null);
+    fetchAddresses();
+  };
+
+  const handleEdit = (addr) => {
+    setEditingAddr(addr);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (addrId) => {
+    setDeletingId(addrId);
+    try {
+      await axiosClient.delete(`/api/users/addresses/${addrId}`);
+      toast.success("Đã xóa địa chỉ.");
+      setAddresses((prev) => {
+        const filtered = prev.filter((a) => a._id !== addrId);
+        if (filtered.length > 0 && !filtered.some((a) => a.isDefault)) {
+          filtered[0] = { ...filtered[0], isDefault: true };
+        }
+        return filtered;
+      });
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Không thể xóa địa chỉ.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleSetDefault = async (addrId) => {
+    try {
+      await axiosClient.patch(`/api/users/addresses/${addrId}/default`);
+      setAddresses((prev) => prev.map((a) => ({ ...a, isDefault: a._id === addrId })));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Không thể đặt mặc định.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#1d1d1f] border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <p className="text-[13px] text-[#6e6e73]">
+          {addresses.length === 0 ? "Chưa có địa chỉ nào." : `${addresses.length} địa chỉ đã lưu`}
+        </p>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          type="button"
+          onClick={() => { setEditingAddr(null); setShowForm(true); }}
+          className="flex items-center gap-1.5 rounded-xl bg-[#1d1d1f] px-4 py-2 text-[13px] font-semibold text-white transition-all hover:bg-[#3d3d3f]"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Thêm địa chỉ
+        </motion.button>
+      </div>
+
+      {/* Empty state */}
+      {addresses.length === 0 && (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-black/[0.12] bg-[#fafafa] py-12">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d1d6" strokeWidth="1.5">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          <p className="text-[14px] text-[#8e8e93]">Bạn chưa lưu địa chỉ nào</p>
+          <button
+            type="button"
+            onClick={() => { setEditingAddr(null); setShowForm(true); }}
+            className="text-[13px] font-medium text-[#0071e3] hover:underline"
+          >
+            Thêm địa chỉ đầu tiên
+          </button>
+        </div>
+      )}
+
+      {/* Address cards */}
+      {addresses.map((addr) => (
+        <div
+          key={addr._id}
+          className={`relative rounded-2xl border p-4 transition-all ${
+            addr.isDefault
+              ? "border-[#1d1d1f] bg-[#f5f5f7]"
+              : "border-black/[0.07] bg-white hover:border-black/[0.15]"
+          }`}
+        >
+          {addr.isDefault && (
+            <span className="absolute right-3 top-3 rounded-full bg-[#1d1d1f] px-2.5 py-0.5 text-[10px] font-semibold text-white">
+              Mặc định
+            </span>
+          )}
+
+          <p className="font-semibold text-[#1d1d1f]">{addr.fullName}</p>
+          <p className="text-[13px] text-[#6e6e73]">{addr.phone}</p>
+          <p className="mt-1 text-[13px] text-[#3a3a3c]">
+            {[addr.street, addr.ward, addr.district, addr.province].filter(Boolean).join(", ")}
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {!addr.isDefault && (
+              <button
+                type="button"
+                onClick={() => handleSetDefault(addr._id)}
+                className="rounded-lg border border-black/[0.1] px-3 py-1.5 text-[12px] font-medium text-[#1d1d1f] transition-all hover:bg-[#f5f5f7]"
+              >
+                Đặt mặc định
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleEdit(addr)}
+              className="rounded-lg border border-black/[0.1] px-3 py-1.5 text-[12px] font-medium text-[#1d1d1f] transition-all hover:bg-[#f5f5f7]"
+            >
+              Chỉnh sửa
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDelete(addr._id)}
+              disabled={deletingId === addr._id}
+              className="rounded-lg border border-[#fca5a5] px-3 py-1.5 text-[12px] font-medium text-[#e53e3e] transition-all hover:bg-[#fff1f0] disabled:opacity-60"
+            >
+              {deletingId === addr._id ? "Đang xóa..." : "Xóa"}
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Modal */}
+      {showForm && (
+        <AddressFormModal
+          initial={editingAddr}
+          onClose={() => { setShowForm(false); setEditingAddr(null); }}
+          onSaved={handleSaved}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ─── AccountPage ────────────────────────────────────────────────── */
 export default function AccountPage() {
   const navigate = useNavigate();
@@ -578,7 +872,7 @@ export default function AccountPage() {
               <nav className="p-2">
                 {NAV_ITEMS.filter((item) =>
                   user?.role === "admin"
-                    ? !["loyalty", "orders", "wishlist"].includes(item.key)
+                    ? !["loyalty", "orders", "wishlist", "addresses"].includes(item.key)
                     : true
                 ).map((item) =>
                   item.link ? (
@@ -682,6 +976,12 @@ export default function AccountPage() {
               <>
                 <h2 className="mb-6 text-[17px] font-semibold text-[#1d1d1f]">Điểm tích lũy</h2>
                 <LoyaltyTab />
+              </>
+            )}
+            {activeTab === "addresses" && (
+              <>
+                <h2 className="mb-6 text-[17px] font-semibold text-[#1d1d1f]">Sổ địa chỉ</h2>
+                <AddressTab />
               </>
             )}
           </motion.div>

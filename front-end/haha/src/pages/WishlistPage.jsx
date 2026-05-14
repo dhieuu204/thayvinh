@@ -9,20 +9,14 @@ import Footer from "../components/Footer";
 import Breadcrumb from "../components/Breadcrumb";
 import { ImageWithFallback } from "../components/ImageWithFallback";
 import { API_URL } from "../lib/api";
+import { getDisplayPrice } from "../lib/pricing";
 import { getWishlist, removeFromWishlist } from "../lib/wishlist";
 import { addToCart } from "../lib/cart";
 import { staggerContainer, staggerItem } from "../lib/animations";
+import { formatCurrency } from "../lib/format";
 
 const SF_FONT =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif";
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 /* ─── Wishlist Card ──────────────────────────────────────────────── */
 function WishlistCard({ product, onRemove, onAddToCart }) {
@@ -168,13 +162,17 @@ function EmptyWishlist() {
 }
 
 function normalizeServerWishlist(products) {
-  return products.map((p) => ({
-    id: p.productId?._id || p.productId,
-    name: p.productId?.name || "Sản phẩm",
-    image: p.productId?.images?.[0]?.url,
-    price: p.productId?.salePrice || p.productId?.basePrice || p.priceAtAdd || 0,
-    oldPrice: p.productId?.salePrice ? p.productId?.basePrice : null,
-  }));
+  return products.map((p) => {
+    const prod = p.productId || {};
+    const { price, oldPrice } = getDisplayPrice(prod);
+    return {
+      id: prod._id || p.productId,
+      name: prod.name || "Sản phẩm",
+      image: prod.images?.[0]?.url,
+      price: price || p.priceAtAdd || 0,
+      oldPrice,
+    };
+  });
 }
 
 /* ─── WishlistPage ───────────────────────────────────────────────── */
@@ -226,18 +224,11 @@ export default function WishlistPage() {
     }
   }, [isServerWishlist, token]);
 
+  // Thêm vào giỏ không kèm variant (không biết user muốn variant nào)
+  // → redirect sang trang chi tiết để chọn
   const handleAddToCart = useCallback((product) => {
-    addToCart({
-      id: product.id,
-      name: product.name,
-      image: product.image,
-      price: product.price,
-      variant: product.variants?.[0] ?? null,
-      color: product.colors?.[0]?.label ?? null,
-      quantity: 1,
-    });
-    toast.success("Đã thêm vào giỏ hàng!");
-  }, []);
+    navigate(`/products/${product.id}`);
+  }, [navigate]);
 
   const handleAddAllToCart = () => {
     items.forEach((p) =>
@@ -246,8 +237,8 @@ export default function WishlistPage() {
         name: p.name,
         image: p.image,
         price: p.price,
-        variant: p.variants?.[0] ?? null,
-        color: p.colors?.[0]?.label ?? null,
+        variant: null,
+        color: null,
         quantity: 1,
       })
     );

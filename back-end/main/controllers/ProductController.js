@@ -3,6 +3,7 @@ const Category           = require("../models/Category");
 const ProductVariant     = require("../models/ProductVariant");
 const RestockSubscriber  = require("../models/RestockSubscriber");
 const FlashSale          = require("../models/FlashSale");
+const { getEffectivePrice } = require("../lib/pricing");
 
 // TODO: Cài slugify: npm install slugify
 // const slugify = require("slugify");
@@ -34,6 +35,20 @@ exports.getAll = async (req, res, next) => {
     const sort = sortOptions[req.query.sort] || sortOptions.newest;
 
     const filter = { isActive: true, deletedAt: null };
+
+    // Tìm kiếm theo tên / mô tả (partial match, không dấu cũng OK vì regex)
+    const keyword = (req.query.search || req.query.q || "").trim();
+    if (keyword) {
+      const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.name = { $regex: escaped, $options: "i" };
+    }
+
+    // Lọc theo giá bán (frontend truyền minPrice/maxPrice)
+    if (req.query.minPrice || req.query.maxPrice) {
+      filter.salePrice = {};
+      if (req.query.minPrice) filter.salePrice.$gte = Number(req.query.minPrice);
+      if (req.query.maxPrice) filter.salePrice.$lte = Number(req.query.maxPrice);
+    }
 
     const [products, total] = await Promise.all([
       Product.find(filter)
@@ -86,9 +101,7 @@ exports.getById = async (req, res, next) => {
       data: {
         ...product.toJSON(),
         flashSaleActive,
-        effectivePrice: flashSaleActive
-          ? product.flashSalePrice
-          : (product.salePrice ?? product.basePrice),
+        effectivePrice: getEffectivePrice(product),
       },
     });
   } catch (err) {
@@ -251,12 +264,19 @@ exports.filterByPrice = async (req, res, next) => {
 
 // ─── 6.6b Category Showcase ───────────────────────────────────────────────────
 // GET /api/products/category-showcase
-// Public — trả về top 6 sản phẩm bán chạy cho mỗi danh mục (iPhone, iPad, Mac)
+// Public — trả về top 8 sản phẩm bán chạy cho mỗi danh mục được đánh dấu showOnHome
+// ?slugs=iphone,mac  → override, chỉ lấy những slug đó (backward compat)
 exports.getCategoryShowcase = async (req, res, next) => {
   try {
-    const slugs = (req.query.slugs || "iphone,ipad,mac").split(",").map((s) => s.trim());
-
-    const categories = await Category.find({ slug: { $in: slugs } });
+    let categories;
+    if (req.query.slugs) {
+      const slugs = req.query.slugs.split(",").map((s) => s.trim()).filter(Boolean);
+      categories = await Category.find({ slug: { $in: slugs }, isActive: true, deletedAt: null })
+        .sort({ sortOrder: 1, createdAt: 1 });
+    } else {
+      categories = await Category.find({ showOnHome: { $ne: false }, isActive: true, deletedAt: null })
+        .sort({ sortOrder: 1, createdAt: 1 });
+    }
 
     const result = await Promise.all(
       categories.map(async (cat) => {
@@ -265,16 +285,17 @@ exports.getCategoryShowcase = async (req, res, next) => {
           isActive: true,
           deletedAt: null,
         })
-          .select("name slug basePrice salePrice images isFlashSale flashSalePrice")
+          .select("name slug basePrice salePrice saleDiscount images isFlashSale flashSalePrice flashSaleEndsAt")
           .sort({ sold: -1 })
-          .limit(6);
+          .limit(8);
         return { slug: cat.slug, name: cat.name, products };
       })
     );
 
-    result.sort((a, b) => slugs.indexOf(a.slug) - slugs.indexOf(b.slug));
+    // Lọc danh mục không có sản phẩm nào
+    const filtered = result.filter((r) => r.products.length > 0);
 
-    return res.status(200).json({ success: true, data: result });
+    return res.status(200).json({ success: true, data: filtered });
   } catch (err) {
     next(err);
   }
@@ -307,12 +328,12 @@ exports.createProduct = async (req, res, next) => {
   try {
     const { name, description, category, basePrice, salePrice, saleDiscount, stock, tags, images } = req.body;
 
-    // Kiểm tra giá bán không được nhỏ hơn giá gốc
+    // Giá bán không được nhỏ hơn giá nhập (không bán dưới giá vốn)
     if (salePrice && Number(salePrice) < Number(basePrice)) {
-      return res.status(400).json({ success: false, message: "Giá bán không được nhỏ hơn giá gốc." });
+      return res.status(400).json({ success: false, message: "Giá bán không được nhỏ hơn giá nhập." });
     }
 
-    // Kiểm tra sale discount: giá sau sale không được nhỏ hơn giá gốc
+    // Giá sau % giảm không được nhỏ hơn giá nhập
     if (saleDiscount) {
       const discountPercent = Number(saleDiscount);
       const baseForDiscount = Number(salePrice || basePrice);
@@ -320,7 +341,7 @@ exports.createProduct = async (req, res, next) => {
       if (finalPrice < Number(basePrice)) {
         return res.status(400).json({
           success: false,
-          message: `Giá sau khi giảm (${Math.round(finalPrice)}) không được nhỏ hơn giá gốc (${basePrice}).`
+          message: `Giá sau giảm (${Math.round(finalPrice)}) không được nhỏ hơn giá nhập (${basePrice}).`
         });
       }
     }
@@ -368,10 +389,10 @@ exports.updateProduct = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại." });
     }
 
-    // Kiểm tra giá bán không được nhỏ hơn giá gốc
+    // Giá bán không được nhỏ hơn giá nhập (không bán dưới giá vốn)
     const finalBasePrice = basePrice !== undefined ? basePrice : product.basePrice;
     if (salePrice && Number(salePrice) < Number(finalBasePrice)) {
-      return res.status(400).json({ success: false, message: "Giá bán không được nhỏ hơn giá gốc." });
+      return res.status(400).json({ success: false, message: "Giá bán không được nhỏ hơn giá nhập." });
     }
 
     // Kiểm tra sale discount: giá sau sale không được nhỏ hơn giá gốc
@@ -383,7 +404,7 @@ exports.updateProduct = async (req, res, next) => {
       if (finalPrice < finalBasePrice) {
         return res.status(400).json({
           success: false,
-          message: `Giá sau khi giảm (${Math.round(finalPrice)}) không được nhỏ hơn giá gốc (${finalBasePrice}).`
+          message: `Giá sau giảm (${Math.round(finalPrice)}) không được nhỏ hơn giá nhập (${finalBasePrice}).`
         });
       }
     }
@@ -469,6 +490,55 @@ exports.getVariants = async (req, res, next) => {
     const variants = await ProductVariant.find({ productId }).select("-__v");
 
     return res.status(200).json({ success: true, data: variants });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 6.10b Create Variant ─────────────────────────────────────────────────────
+// POST /api/products/:id/variants  (Admin)
+exports.createVariant = async (req, res, next) => {
+  try {
+    const { id: productId } = req.params;
+    const { name, sku, attributes, stock, price } = req.body;
+
+    const product = await Product.findOne({ _id: productId, deletedAt: null });
+    if (!product) return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại." });
+
+    if (!attributes || typeof attributes !== "object" || Object.keys(attributes).length === 0) {
+      return res.status(400).json({ success: false, message: "Cần ít nhất 1 thuộc tính." });
+    }
+
+    // Variant.price = giá list của variant (chưa áp saleDiscount).
+    // saleDiscount của product sẽ được áp lúc hiển thị / tính order.
+    const variantPrice = price !== undefined && price !== null
+      ? Number(price)
+      : (product.salePrice ?? product.basePrice);
+
+    const variant = await ProductVariant.create({
+      productId,
+      name: name || Object.entries(attributes).map(([, v]) => `${v}`).join(" - "),
+      sku: sku || undefined,
+      attributes,
+      price: variantPrice,
+      stock: Number(stock) || 0,
+    });
+
+    return res.status(201).json({ success: true, data: variant });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, message: "SKU đã tồn tại." });
+    next(err);
+  }
+};
+
+// ─── 6.10c Delete Variant ─────────────────────────────────────────────────────
+// DELETE /api/products/:id/variants/:variantId  (Admin)
+exports.deleteVariant = async (req, res, next) => {
+  try {
+    const { id: productId, variantId } = req.params;
+    const deleted = await ProductVariant.findOneAndDelete({ _id: variantId, productId });
+    if (!deleted) return res.status(404).json({ success: false, message: "Variant không tồn tại." });
+    return res.status(200).json({ success: true, message: "Đã xoá variant." });
   } catch (err) {
     next(err);
   }

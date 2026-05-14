@@ -34,6 +34,10 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    showOnHome: {
+      type: Boolean,
+      default: true, // Hiện trong CategoryShowcase ở trang chủ
+    },
     sortOrder: {
       type: Number,
       default: 0,   // Số nhỏ hơn hiển thị trước

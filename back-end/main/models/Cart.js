@@ -15,7 +15,14 @@ const cartSchema = new mongoose.Schema(
           ref: 'Product',
           required: true,
         },
-        quantity: { type: Number, default: 1, min: 1 },
+        variantId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'ProductVariant',
+          default: null,
+        },
+        color:       { type: String, default: "" },
+        priceAtAdd:  { type: Number, default: 0 },
+        quantity:    { type: Number, default: 1, min: 1 },
       },
     ],
 

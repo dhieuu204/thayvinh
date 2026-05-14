@@ -1,12 +1,17 @@
 const multer = require("multer");
+const path   = require("path");
 
 const storage = multer.memoryStorage();
 
+const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const ALLOWED_EXT  = /\.(jpe?g|png|webp|gif)$/i;
+
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_MIME.has(file.mimetype) && ALLOWED_EXT.test(ext)) {
     cb(null, true);
   } else {
-    cb(new Error("Vui lòng chỉ upload file ảnh hoặc video."), false);
+    cb(new Error("Chỉ chấp nhận file ảnh .jpg/.png/.webp/.gif."), false);
   }
 };
 

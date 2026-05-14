@@ -67,4 +67,5 @@ export const removeFromWishlist = (id) => {
   const updated = getWishlist().filter((i) => i.id !== id);
   localStorage.setItem(WISHLIST_KEY, JSON.stringify(updated));
   window.dispatchEvent(new Event("wishlistUpdated"));
+  syncServer(id);
 };

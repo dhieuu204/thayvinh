@@ -9,25 +9,18 @@ import Footer from "../components/Footer";
 import Breadcrumb from "../components/Breadcrumb";
 import { ImageWithFallback } from "../components/ImageWithFallback";
 import { API_URL } from "../lib/api";
+import { getDisplayPrice } from "../lib/pricing";
 import {
   getCart,
   updateQty,
   removeFromCart,
   getCartTotal,
 } from "../lib/cart";
+import { FREE_SHIPPING_THRESHOLD as FREE_SHIP_THRESHOLD, SHIPPING_FEE, calcShippingFee } from "../lib/shipping";
+import { formatCurrency } from "../lib/format";
 
 const SF_FONT =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif";
-
-const FREE_SHIP_THRESHOLD = 500_000;
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 /* ─── Cart Item Row ──────────────────────────────────────────────── */
 function CartItem({ item, onQtyChange, onRemove }) {
@@ -249,15 +242,19 @@ function EmptyCart() {
 }
 
 function normalizeServerCart(products) {
-  return products.map((p) => ({
-    id: p.productId?._id || p.productId,
-    name: p.productId?.name || "Sản phẩm",
-    image: p.productId?.images?.[0]?.url,
-    price: p.productId?.salePrice || p.productId?.basePrice || 0,
-    quantity: p.quantity,
-    variant: null,
-    color: null,
-  }));
+  return products.map((p) => {
+    const prod = p.productId || {};
+    const { price } = getDisplayPrice(prod);
+    return {
+      id: prod._id || p.productId,
+      name: prod.name || "Sản phẩm",
+      image: prod.images?.[0]?.url,
+      price: price || 0,
+      quantity: p.quantity,
+      variant: null,
+      color: null,
+    };
+  });
 }
 
 /* ─── CartPage ───────────────────────────────────────────────────── */

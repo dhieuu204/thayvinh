@@ -17,6 +17,7 @@ router.get("/stats/orders-by-status", ...guard, AdminController.getOrdersByStatu
 
 // ── Quản lý đơn hàng ──────────────────────────────────────────────────────────
 router.get("/orders",                      ...guard, AdminController.getAllOrders);
+router.get("/orders/:orderId",             ...guard, AdminController.getOrderById);
 router.patch("/orders/:orderId/status",    ...guard, AdminController.updateOrderStatus);
 
 // ── Quản lý user ──────────────────────────────────────────────────────────────

@@ -6,7 +6,6 @@ const returnRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
       required: true,
-      index: true,
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -30,7 +29,13 @@ const returnRequestSchema = new mongoose.Schema(
     },
     resolvedAt: {
       type: Date,
-      default: null,  // Set khi admin approve/reject
+      default: null,
+    },
+    // Thông tin TK nhận hoàn tiền (chỉ cần cho đơn thanh toán online)
+    refundBankInfo: {
+      bankName:      { type: String, default: "" },
+      accountNumber: { type: String, default: "" },
+      accountHolder: { type: String, default: "" },
     },
   },
   { timestamps: true }

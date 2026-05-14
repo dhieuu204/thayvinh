@@ -2,6 +2,13 @@ const express = require("express");
 const cors    = require("cors");
 const dotenv  = require("dotenv");
 dotenv.config();
+
+// Fail-fast: bắt buộc JWT secrets phải có. Nếu không, refresh và access token có thể đổi vai trò.
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+  console.error("FATAL: JWT_SECRET và JWT_REFRESH_SECRET phải được đặt trong .env");
+  process.exit(1);
+}
+
 const connectDB = require("./config/db");
 
 // ── Import routes ──────────────────────────────────────────────────────────────
@@ -22,13 +29,19 @@ const imageRoutes        = require("./routes/imageRoutes");
 const bannerRoutes       = require("./routes/bannerRoutes");
 const settingsRoutes     = require("./routes/settingsRoutes");
 
+const cookieParser = require("cookie-parser");
+const rateLimit    = require("express-rate-limit");
+const passport = require("./config/passport");
 const app = express();
+
+const ALLOWED_ORIGINS = process.env.NODE_ENV === "production"
+  ? [process.env.CLIENT_URL].filter(Boolean)
+  : ["http://localhost:5174"];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Cho phép mọi localhost (bất kể port) và không có origin (curl, Postman)
-      if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -40,11 +53,35 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(passport.initialize());
+
+// ── Rate limiting ──────────────────────────────────────────────────────────────
+const authLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 phút
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút." },
+});
+const searchLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Quá nhiều yêu cầu tìm kiếm." },
+});
 
 // Kết nối MongoDB
 connectDB();
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
+app.use("/api/auth/login",          authLimit);
+app.use("/api/auth/register",       authLimit);
+app.use("/api/auth/forgot-password",authLimit);
+app.use("/api/auth/verify-otp",     authLimit);
+app.use("/api/auth/verify-register-otp", authLimit);
+app.use("/api/products/search",     searchLimit);
 app.use("/api/auth",          authRoutes);
 app.use("/api/users",         userRoutes);
 app.use("/api/products",      productRoutes);
@@ -66,7 +103,11 @@ app.use("/api/settings",      settingsRoutes);
 app.use((err, req, res, next) => {
   console.error("[ERROR]", err);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ success: false, message: err.message || "Lỗi server." });
+  const isProd = process.env.NODE_ENV === "production";
+  res.status(status).json({
+    success: false,
+    message: isProd ? "Có lỗi xảy ra. Vui lòng thử lại sau." : (err.message || "Lỗi server."),
+  });
 });
 
 // Khởi chạy server

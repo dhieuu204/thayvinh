@@ -8,7 +8,7 @@ const axiosClient = axios.create({ baseURL: API_URL, withCredentials: true });
 axiosClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  // Không set Content-Type cho FormData (axios sẽ tự handle)
+  config._hadToken = !!token; // dùng để quyết định redirect khi refresh fail
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
@@ -59,7 +59,10 @@ axiosClient.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.dispatchEvent(new Event("userUpdated"));
-      window.location.replace("/login");
+      // Chỉ redirect khi trước đó có token (user đã login) — tránh kick guest về /login
+      if (original._hadToken) {
+        window.location.replace("/login");
+      }
       return Promise.reject(err);
     } finally {
       isRefreshing = false;

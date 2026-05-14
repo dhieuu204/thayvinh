@@ -1,0 +1,25 @@
+# Secrets
+back-end/main/.env
+front-end/haha/.env
+front-end/haha/.env.local
+
+# Dependencies
+node_modules/
+back-end/main/node_modules/
+front-end/haha/node_modules/
+
+# Build output
+front-end/haha/dist/
+front-end/haha/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/

@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { fetchAPI } from "../../lib/api";
+import { getDisplayPrice } from "../../lib/pricing";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ImageWithFallback } from "../ImageWithFallback";
@@ -31,12 +32,7 @@ function CarouselArrow({ left, onClick }) {
 /* ─── Product Card ──────────────────────────────────────────────── */
 function ShowcaseCard({ product }) {
   const image = product.images?.[0]?.url;
-  const salePrice = product.salePrice ?? product.basePrice;
-  const originalPrice = product.basePrice;
-  const discount =
-    salePrice && salePrice < originalPrice
-      ? Math.round((1 - salePrice / originalPrice) * 100)
-      : null;
+  const { price, oldPrice, discount } = getDisplayPrice(product);
 
   return (
     <Link
@@ -65,11 +61,11 @@ function ShowcaseCard({ product }) {
 
         <div className="mt-2 flex flex-wrap justify-center items-baseline gap-x-1.5 gap-y-0.5">
           <span className="text-[15px] font-bold text-[#e53e3e]">
-            {formatCurrency(salePrice)}
+            {formatCurrency(price)}
           </span>
-          {discount && (
+          {oldPrice && (
             <span className="text-[11px] text-[#8e8e93] line-through">
-              {formatCurrency(originalPrice)}
+              {formatCurrency(oldPrice)}
             </span>
           )}
         </div>

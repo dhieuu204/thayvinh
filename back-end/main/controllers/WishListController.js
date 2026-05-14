@@ -1,12 +1,16 @@
 const Product  = require("../models/Product");
 const WishList = require("../models/WishList");
 const Cart     = require("../models/Cart");
+const { getEffectivePrice } = require("../lib/pricing");
 
 // ─── View Wishlist ────────────────────────────────────────────────────────────
 exports.viewWishList = async (req, res, next) => {
   try {
     const wishList = await WishList.findOne({ userId: req.user.id })
-      .populate("products.productId", "name basePrice salePrice images isActive stock");
+      .populate(
+        "products.productId",
+        "name basePrice salePrice saleDiscount isFlashSale flashSalePrice flashSaleEndsAt images isActive stock"
+      );
 
     if (!wishList) {
       return res.status(200).json({ success: true, data: { products: [] } });
@@ -30,26 +34,18 @@ exports.addToWishList = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại." });
     }
 
-    let wishList = await WishList.findOne({ userId: req.user.id });
-    if (!wishList) {
-      wishList = new WishList({ userId: req.user.id, products: [] });
-    }
+    const price = getEffectivePrice(product);
 
-    const alreadyIn = wishList.products.some(
-      (item) => item.productId.toString() === productId
+    // Atomic: upsert wishlist, chỉ push khi productId chưa có — tránh dedupe race condition
+    const result = await WishList.findOneAndUpdate(
+      { userId: req.user.id, "products.productId": { $ne: productId } },
+      { $push: { products: { productId, priceAtAdd: price } } },
+      { upsert: true, new: true }
     );
-    if (alreadyIn) {
+
+    if (!result) {
       return res.status(200).json({ success: true, message: "Sản phẩm đã có trong danh sách yêu thích." });
     }
-
-    // Lưu priceAtAdd để trigger price drop notification khi giá giảm
-    // TODO: Khi có Notification model, so sánh priceAtAdd với giá hiện tại định kỳ
-    wishList.products.push({
-      productId,
-      priceAtAdd: product.salePrice ?? product.basePrice,
-    });
-
-    await wishList.save();
     return res.status(200).json({ success: true, message: "Đã thêm vào danh sách yêu thích." });
   } catch (err) {
     next(err);

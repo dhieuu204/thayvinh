@@ -138,7 +138,7 @@ export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [modal, setModal]           = useState(null);
-  const [toggling, setToggling]     = useState(null);
+  const [toggling, setToggling]     = useState(null); // "_id" hoặc "_id_home" để phân biệt
   const [saving, setSaving]         = useState(false);
 
   // Drag state
@@ -226,6 +226,22 @@ export default function AdminCategoriesPage() {
     }
   };
 
+  /* ── Toggle showOnHome ── */
+  const handleToggleHome = async (cat) => {
+    setToggling(cat._id + "_home");
+    try {
+      await axiosClient.put(`/api/categories/${cat._id}`, { showOnHome: !cat.showOnHome });
+      setCategories((prev) =>
+        prev.map((c) => (c._id === cat._id ? { ...c, showOnHome: !c.showOnHome } : c))
+      );
+      toast.success(cat.showOnHome ? "Đã ẩn khỏi trang chủ" : "Đã hiện trên trang chủ");
+    } catch {
+      toast.error("Cập nhật thất bại");
+    } finally {
+      setToggling(null);
+    }
+  };
+
   /* ── Delete ── */
   const handleDelete = async (cat) => {
     if (!confirm(`Xoá danh mục "${cat.name}"? Sản phẩm trong danh mục sẽ không bị xoá.`)) return;
@@ -282,7 +298,7 @@ export default function AdminCategoriesPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-black/[0.06] bg-[#fafafa]">
-                  {["", "Ảnh", "Tên danh mục", "Slug", "Mô tả", "Hiển thị", "Thao tác"].map((h) => (
+                  {["", "Ảnh", "Tên danh mục", "Slug", "Mô tả", "Hiển thị", "Trang chủ", "Thao tác"].map((h) => (
                     <th key={h} className="px-4 py-3 text-[12px] font-semibold text-[#6e6e73] whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -343,6 +359,15 @@ export default function AdminCategoriesPage() {
                     {/* Toggle isActive */}
                     <td className="px-4 py-3">
                       <Toggle checked={c.isActive !== false} onChange={() => handleToggleActive(c)} disabled={toggling === c._id} />
+                    </td>
+
+                    {/* Toggle showOnHome */}
+                    <td className="px-4 py-3">
+                      <Toggle
+                        checked={c.showOnHome !== false}
+                        onChange={() => handleToggleHome(c)}
+                        disabled={toggling === c._id + "_home"}
+                      />
                     </td>
 
                     {/* Thao tác */}

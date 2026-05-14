@@ -121,7 +121,7 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, imageUrl, parent, isActive, sortOrder } = req.body;
+    const { name, description, imageUrl, parent, isActive, sortOrder, showOnHome } = req.body;
 
     const category = await Category.findOne({ _id: id, deletedAt: null });
     if (!category) {
@@ -149,6 +149,7 @@ exports.update = async (req, res, next) => {
     if (imageUrl    !== undefined) updateData.imageUrl    = imageUrl;
     if (isActive    !== undefined) updateData.isActive    = isActive;
     if (sortOrder   !== undefined) updateData.sortOrder   = sortOrder;
+    if (showOnHome  !== undefined) updateData.showOnHome  = showOnHome;
 
     // Kiểm tra parent hợp lệ nếu thay đổi
     if (parent !== undefined) {

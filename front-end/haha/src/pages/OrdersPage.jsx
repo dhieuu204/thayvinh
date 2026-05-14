@@ -8,17 +8,11 @@ import Footer from "../components/Footer";
 import Breadcrumb from "../components/Breadcrumb";
 import { ImageWithFallback } from "../components/ImageWithFallback";
 import axiosClient from "../lib/api";
+import { SHOP_BANK, buildVietQRUrl } from "../lib/shopConfig";
+import { formatCurrency } from "../lib/format";
 
 const SF_FONT =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif";
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("vi-VN", {
@@ -30,72 +24,32 @@ function formatDate(dateStr) {
   });
 }
 
-/* ─── Mock orders dùng khi API chưa sẵn sàng ─────────────────────── */
-const MOCK_ORDERS = [
-  {
-    _id: "ORD-001234",
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-    status: "delivered",
-    paymentMethod: "cod",
-    total: 34990000,
-    items: [
-      { productId: 101, name: "iPhone 17 Pro Max", variant: "256GB", color: "Cam Vũ Trụ", price: 34990000, quantity: 1, image: "https://cdn.tgdd.vn/Products/Images/42/342680/s16/iphone-17-pro-max-cam-thumb-650x650.png" },
-    ],
-    shippingInfo: { fullName: "Nguyễn Văn A", phone: "0912345678", address: "123 Lê Lợi, P. Bến Nghé, Q.1, TP.HCM" },
-  },
-  {
-    _id: "ORD-002345",
-    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-    status: "shipping",
-    paymentMethod: "bank",
-    total: 49980000,
-    items: [
-      { productId: 105, name: "MacBook Pro 14 M5 Pro", variant: "1TB", color: "Đen Thiên Hà", price: 56990000, quantity: 1, image: "https://cdn.tgdd.vn/Products/Images/44/363488/s16/macbook-pro-14-inch-m5-pro-24gb-1tb-den-thumb-650x650.png" },
-      { productId: 109, name: "AirPods Pro 3", variant: "USB-C", color: "Trắng", price: 6990000, quantity: 2, image: "https://cdn.tgdd.vn/Products/Images/54/329154/s16/airpods-4-thumb-1-650x650.png" },
-    ],
-    shippingInfo: { fullName: "Nguyễn Văn A", phone: "0912345678", address: "123 Lê Lợi, P. Bến Nghé, Q.1, TP.HCM" },
-  },
-  {
-    _id: "ORD-003456",
-    createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
-    status: "pending",
-    paymentMethod: "momo",
-    total: 11990000,
-    items: [
-      { productId: 107, name: "Apple Watch Series 11", variant: "42mm", color: "Vàng Hồng", price: 11990000, quantity: 1, image: "https://cdn.tgdd.vn/Products/Images/7077/344750/s16/apple-watch-series-11-42mm-vien-nhom-day-the-thao-vang-hong-thumb-650x650.png" },
-    ],
-    shippingInfo: { fullName: "Nguyễn Văn A", phone: "0912345678", address: "123 Lê Lợi, P. Bến Nghé, Q.1, TP.HCM" },
-  },
-  {
-    _id: "ORD-004567",
-    createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
-    status: "cancelled",
-    paymentMethod: "cod",
-    total: 17990000,
-    items: [
-      { productId: 104, name: "iPad Air 11-inch", variant: "128GB", color: "Xanh Dương", price: 17990000, quantity: 1, image: "https://cdn.tgdd.vn/Products/Images/522/328576/s16/ipad-air-11-inch-m3-wifi-blue-thumb-650x650.png" },
-    ],
-    shippingInfo: { fullName: "Nguyễn Văn A", phone: "0912345678", address: "123 Lê Lợi, P. Bến Nghé, Q.1, TP.HCM" },
-  },
-];
 
 /* ─── Status config ─────────────────────────────────────────────── */
 const STATUS_CONFIG = {
-  pending: { label: "Chờ xác nhận", color: "bg-[#fff7ed] text-[#c2410c] border-[#fed7aa]", dot: "bg-[#f97316]" },
-  confirmed: { label: "Đã xác nhận", color: "bg-[#eff6ff] text-[#1d4ed8] border-[#bfdbfe]", dot: "bg-[#3b82f6]" },
-  shipping: { label: "Đang giao", color: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]", dot: "bg-[#22c55e] animate-pulse" },
-  delivered: { label: "Đã giao", color: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]", dot: "bg-[#16a34a]" },
-  cancelled: { label: "Đã huỷ", color: "bg-[#fef2f2] text-[#dc2626] border-[#fecaca]", dot: "bg-[#ef4444]" },
+  pendingpayment: { label: "Đã TT · Chờ xác nhận", color: "bg-[#fef3c7] text-[#92400e] border-[#fde68a]", dot: "bg-[#f59e0b] animate-pulse" },
+  pending:    { label: "Chờ xác nhận",  color: "bg-[#fff7ed] text-[#c2410c] border-[#fed7aa]", dot: "bg-[#f97316]" },
+  confirmed:  { label: "Đã xác nhận",   color: "bg-[#eff6ff] text-[#1d4ed8] border-[#bfdbfe]", dot: "bg-[#3b82f6]" },
+  shipping:   { label: "Đang giao",     color: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]", dot: "bg-[#22c55e] animate-pulse" },
+  delivered:  { label: "Đã giao",       color: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]", dot: "bg-[#16a34a]" },
+  cancelled:  { label: "Đã huỷ",        color: "bg-[#fef2f2] text-[#dc2626] border-[#fecaca]", dot: "bg-[#ef4444]" },
 };
 
-const PAYMENT_LABEL = { cod: "COD", bank: "Chuyển khoản", momo: "MoMo" };
+const REFUND_CONFIG = {
+  pending_refund: { label: "Chờ hoàn tiền", color: "bg-[#fef3c7] text-[#92400e] border-[#fde68a]" },
+  refunded:       { label: "Đã hoàn tiền",  color: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]" },
+};
+
+const PAYMENT_LABEL = { cod: "COD", bank: "Chuyển khoản", momo: "MoMo", vnpay: "VNPay" };
 
 const TABS = [
-  { key: "all", label: "Tất cả" },
-  { key: "pending", label: "Chờ xác nhận" },
-  { key: "shipping", label: "Đang giao" },
-  { key: "delivered", label: "Đã giao" },
-  { key: "cancelled", label: "Đã huỷ" },
+  { key: "all",            label: "Tất cả" },
+  { key: "pendingpayment", label: "Đã TT · Chờ xác nhận" },
+  { key: "pending",        label: "Chờ xác nhận" },
+  { key: "confirmed",      label: "Đã xác nhận" },
+  { key: "shipping",       label: "Đang giao" },
+  { key: "delivered",      label: "Đã giao" },
+  { key: "cancelled",      label: "Đã huỷ" },
 ];
 
 /* ─── Skeleton loader ─────────────────────────────────────────────── */
@@ -120,16 +74,25 @@ function OrderSkeleton() {
 }
 
 /* ─── Return Request Modal ───────────────────────────────────────── */
-function ReturnModal({ orderId, onClose, onSuccess }) {
+function ReturnModal({ orderId, paymentMethod, onClose, onSuccess }) {
   const [reason, setReason] = useState("");
+  const [bankInfo, setBankInfo] = useState({ bankName: "", accountNumber: "", accountHolder: "" });
   const [loading, setLoading] = useState(false);
+  const needsBankInfo = paymentMethod && paymentMethod !== "cod";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!reason.trim()) { toast.error("Vui lòng nhập lý do hoàn hàng."); return; }
+    if (needsBankInfo && (!bankInfo.bankName.trim() || !bankInfo.accountNumber.trim() || !bankInfo.accountHolder.trim())) {
+      toast.error("Vui lòng điền đầy đủ thông tin tài khoản nhận hoàn tiền.");
+      return;
+    }
     setLoading(true);
     try {
-      await axiosClient.post(`/api/orders/${orderId}/return`, { reason });
+      await axiosClient.post(`/api/orders/${orderId}/return`, {
+        reason,
+        ...(needsBankInfo ? { refundBankInfo: bankInfo } : {}),
+      });
       toast.success("Yêu cầu hoàn hàng đã được gửi!");
       onSuccess();
       onClose();
@@ -160,11 +123,36 @@ function ReturnModal({ orderId, onClose, onSuccess }) {
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              rows={4}
+              rows={3}
               placeholder="Mô tả lý do bạn muốn hoàn trả sản phẩm..."
               className="w-full resize-none rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-3 text-[14px] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20"
             />
           </div>
+
+          {needsBankInfo && (
+            <div className="space-y-3 rounded-xl border border-[#fde68a] bg-[#fffbf0] p-4">
+              <p className="text-[12px] font-semibold text-[#92400e]">
+                Thông tin tài khoản nhận hoàn tiền
+              </p>
+              {[
+                { key: "bankName",      label: "Ngân hàng",     placeholder: "VD: Vietcombank" },
+                { key: "accountNumber", label: "Số tài khoản",  placeholder: "VD: 1234567890" },
+                { key: "accountHolder", label: "Tên chủ TK",    placeholder: "VD: NGUYEN VAN A" },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="mb-1 block text-[12px] font-medium text-[#78350f]">{label} *</label>
+                  <input
+                    type="text"
+                    value={bankInfo[key]}
+                    onChange={(e) => setBankInfo((b) => ({ ...b, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full rounded-lg border border-[#fde68a] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#f59e0b] focus:ring-2 focus:ring-[#f59e0b]/20"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-3">
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -188,10 +176,152 @@ function ReturnModal({ orderId, onClose, onSuccess }) {
   );
 }
 
+/* ─── Bank Info Modal (xem lại thông tin CK) ────────────────────── */
+function BankInfoModal({ order, onClose }) {
+  const amount = order?.total ?? 0;
+  const orderRef = order?.orderNumber ?? order?._id ?? "";
+  const qrUrl = buildVietQRUrl(amount, orderRef);
+  const fmt = (n) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+      >
+        <div className="bg-[#1d1d1f] px-6 py-3 shrink-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Chuyển khoản ngân hàng</p>
+          <p className="mt-0.5 text-[16px] font-semibold text-white">Thông tin thanh toán</p>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto">
+          <div className="flex justify-center">
+            <div className="rounded-2xl border border-black/[0.08] p-2.5 bg-[#fafafa]">
+              <img src={qrUrl} alt="VietQR" className="h-[150px] w-[150px] object-contain" />
+            </div>
+          </div>
+          <p className="text-center text-[12px] text-[#8e8e93]">Quét bằng app ngân hàng bất kỳ</p>
+
+          <div className="rounded-xl border border-black/[0.07] divide-y divide-black/[0.05] text-[13px]">
+            {[
+              { label: "Ngân hàng",     value: SHOP_BANK.bankName },
+              { label: "Số tài khoản",  value: SHOP_BANK.accountNumber },
+              { label: "Chủ tài khoản", value: SHOP_BANK.accountHolder },
+              { label: "Số tiền",       value: fmt(amount),  highlight: true },
+              { label: "Nội dung CK",   value: orderRef,     highlight: true },
+            ].map(({ label, value, highlight }) => (
+              <div key={label} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                <span className="text-[#6e6e73] shrink-0">{label}</span>
+                <span className={`font-semibold text-right ${highlight ? "text-[#e53e3e]" : "text-[#1d1d1f]"}`}>{value}</span>
+              </div>
+            ))}
+          </div>
+
+          <p className="rounded-xl bg-[#fffbf0] border border-[#fde8b1] px-4 py-2.5 text-[12px] text-[#92400e]">
+            Đơn hàng sẽ được xử lý sau khi chúng tôi xác nhận giao dịch (thường trong vòng 1-2 giờ).
+          </p>
+        </div>
+
+        <div className="px-5 pb-5 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-full bg-[#1d1d1f] py-3 text-[14px] font-semibold text-white transition-all hover:bg-[#3d3d3f]"
+          >
+            Đóng
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ─── Cancel Confirm Modal ───────────────────────────────────────── */
+function CancelModal({ order, onClose, onConfirm }) {
+  const needsBankInfo = order.status === "pendingpayment" && order.paymentMethod === "bank";
+  const [bankInfo, setBankInfo] = useState({ bankName: "", accountNumber: "", accountHolder: "" });
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (needsBankInfo && (!bankInfo.bankName.trim() || !bankInfo.accountNumber.trim() || !bankInfo.accountHolder.trim())) {
+      toast.error("Vui lòng điền đầy đủ thông tin tài khoản nhận hoàn tiền.");
+      return;
+    }
+    setLoading(true);
+    await onConfirm(needsBankInfo ? bankInfo : null);
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl"
+      >
+        <div className="border-b border-black/[0.06] px-5 py-4">
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Xác nhận huỷ đơn hàng</h3>
+          {needsBankInfo && (
+            <p className="mt-1 text-[12px] text-[#92400e] bg-[#fffbf0] border border-[#fde68a] rounded-lg px-3 py-2">
+              Vì bạn đã chuyển khoản, vui lòng cung cấp tài khoản để chúng tôi hoàn tiền.
+            </p>
+          )}
+        </div>
+
+        <div className="p-5 space-y-3">
+          {needsBankInfo && (
+            <div className="space-y-3">
+              {[
+                { key: "bankName",      label: "Ngân hàng",     placeholder: "VD: Vietcombank" },
+                { key: "accountNumber", label: "Số tài khoản",  placeholder: "VD: 1234567890" },
+                { key: "accountHolder", label: "Tên chủ TK",    placeholder: "VD: NGUYEN VAN A" },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="mb-1 block text-[12px] font-medium text-[#1d1d1f]">{label} *</label>
+                  <input
+                    type="text"
+                    value={bankInfo[key]}
+                    onChange={(e) => setBankInfo((b) => ({ ...b, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full rounded-xl border border-black/[0.1] bg-[#fafafa] px-3 py-2.5 text-[13px] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 rounded-full bg-[#e53e3e] py-2.5 text-[13px] font-semibold text-white transition-all hover:bg-[#c53030] disabled:opacity-60"
+            >
+              {loading ? "Đang huỷ..." : "Xác nhận huỷ"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-full border border-black/[0.15] py-2.5 text-[13px] font-medium text-[#1d1d1f] transition-all hover:bg-[#f5f5f7]"
+            >
+              Giữ đơn hàng
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 /* ─── Order Card ─────────────────────────────────────────────────── */
 function OrderCard({ order, onCancel, onReturn }) {
   const [expanded, setExpanded] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [showBankInfo, setShowBankInfo] = useState(false);
   const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const MAX_THUMBS = 3;
   const extraCount = order.items.length - MAX_THUMBS;
@@ -209,14 +339,17 @@ function OrderCard({ order, onCancel, onReturn }) {
           <span className="text-[12px] text-[#6e6e73]">Mã đơn hàng</span>
           <span className="font-semibold text-[#1d1d1f]">#{order._id}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <span className="text-xs text-[#8e8e93]">{formatDate(order.createdAt)}</span>
-          <span
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${cfg.color}`}
-          >
+          <span className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${cfg.color}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
             {cfg.label}
           </span>
+          {order.refundStatus !== "none" && REFUND_CONFIG[order.refundStatus] && (
+            <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${REFUND_CONFIG[order.refundStatus].color}`}>
+              {REFUND_CONFIG[order.refundStatus].label}
+            </span>
+          )}
         </div>
       </div>
 
@@ -316,6 +449,32 @@ function OrderCard({ order, onCancel, onReturn }) {
                 ))}
               </div>
 
+              {/* Order summary */}
+              <div className="mb-4 rounded-xl bg-[#f5f5f7] px-4 py-3 space-y-1.5 text-[12px]">
+                {order.discountAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-[#6e6e73]">
+                      Giảm giá{order.voucherCode ? ` (${order.voucherCode})` : ""}
+                    </span>
+                    <span className="text-[#16a34a] font-medium">
+                      -{formatCurrency(order.discountAmount)}
+                    </span>
+                  </div>
+                )}
+                {order.shippingFee >= 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-[#6e6e73]">Phí vận chuyển</span>
+                    <span className="font-medium text-[#1d1d1f]">
+                      {order.shippingFee === 0 ? "Miễn phí" : formatCurrency(order.shippingFee)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-black/[0.06] pt-1.5">
+                  <span className="font-medium text-[#1d1d1f]">Tổng cộng</span>
+                  <span className="font-bold text-[#1d1d1f]">{formatCurrency(order.total)}</span>
+                </div>
+              </div>
+
               {/* Shipping info */}
               <div className="rounded-xl bg-[#f5f5f7] px-4 py-3 space-y-1">
                 <p className="text-[12px] font-medium text-[#1d1d1f]">Địa chỉ giao hàng</p>
@@ -327,12 +486,21 @@ function OrderCard({ order, onCancel, onReturn }) {
                 </p>
               </div>
 
-              {/* Re-order or Cancel (if pending) */}
-              {order.status === "pending" && (
-                <div className="mt-3">
+              {/* Cancel */}
+              {["pendingpayment", "pending", "confirmed"].includes(order.status) && (
+                <div className="mt-3 flex gap-2 flex-wrap">
+                  {order.status === "pendingpayment" && order.paymentMethod === "bank" && (
+                    <button
+                      type="button"
+                      onClick={() => setShowBankInfo(true)}
+                      className="rounded-full border border-[#0071e3] px-4 py-2 text-sm font-medium text-[#0071e3] transition-all hover:bg-[#eef6ff]"
+                    >
+                      Xem thông tin CK
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => onCancel(order._id)}
+                    onClick={() => setShowCancel(true)}
                     className="rounded-full border border-[#e53e3e] px-4 py-2 text-sm font-medium text-[#e53e3e] transition-all hover:bg-[#fff1f0]"
                   >
                     Huỷ đơn hàng
@@ -370,30 +538,49 @@ function OrderCard({ order, onCancel, onReturn }) {
                 <p className="mt-3 text-[12px] text-[#8e8e93]">Đã gửi yêu cầu hoàn hàng</p>
               )}
 
-              <AnimatePresence>
-                {showReturn && (
-                  <ReturnModal
-                    orderId={order._id}
-                    onClose={() => setShowReturn(false)}
-                    onSuccess={() => onReturn(order._id)}
-                  />
-                )}
-              </AnimatePresence>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modals phải ra ngoài motion.div để fixed positioning không bị vỡ */}
+      <AnimatePresence>
+        {showReturn && (
+          <ReturnModal
+            orderId={order._id}
+            paymentMethod={order.paymentMethod}
+            onClose={() => setShowReturn(false)}
+            onSuccess={() => onReturn(order._id)}
+          />
+        )}
+        {showCancel && (
+          <CancelModal
+            order={order}
+            onClose={() => setShowCancel(false)}
+            onConfirm={async (refundBankInfo) => {
+              await onCancel(order._id, refundBankInfo);
+              setShowCancel(false);
+            }}
+          />
+        )}
+        {showBankInfo && (
+          <BankInfoModal
+            order={order}
+            onClose={() => setShowBankInfo(false)}
+          />
         )}
       </AnimatePresence>
     </motion.div>
   );
 }
 
-// Backend trả về status dạng PascalCase (Pending, Shipped...), frontend dùng lowercase
 const STATUS_MAP = {
-  Pending: "pending",
-  Confirmed: "confirmed",
-  Shipped: "shipping",
-  Delivered: "delivered",
-  Cancelled: "cancelled",
+  PendingPayment: "pendingpayment",
+  Pending:    "pending",
+  Confirmed:  "confirmed",
+  Shipped:    "shipping",
+  Delivered:  "delivered",
+  Cancelled:  "cancelled",
 };
 
 function normalizeOrder(o) {
@@ -404,7 +591,7 @@ function normalizeOrder(o) {
       productId: p.product?._id,
       name: p.product?.name || p.name || "Sản phẩm",
       image: p.product?.images?.[0]?.url || p.image,
-      price: p.product?.salePrice || p.product?.basePrice || p.price || 0,
+      price: p.priceAtOrder ?? p.product?.salePrice ?? p.product?.basePrice ?? p.price ?? 0,
       quantity: p.quantity,
       variant: p.variant || null,
       color: p.color || null,
@@ -416,6 +603,8 @@ function normalizeOrder(o) {
         .filter(Boolean)
         .join(", "),
     },
+    refundStatus:   o.refundStatus   || "none",
+    refundBankInfo: o.refundBankInfo || {},
   };
 }
 
@@ -434,17 +623,23 @@ export default function OrdersPage() {
         const raw = res.data?.data?.orders || res.data?.orders || [];
         setOrders(raw.map(normalizeOrder));
       })
-      .catch(() => setOrders([]))
+      .catch((err) => {
+        console.error("[OrdersPage] lỗi tải đơn hàng:", err?.response?.data || err.message);
+        setOrders([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const handleCancel = async (orderId) => {
+  const handleCancel = async (orderId, refundBankInfo = null) => {
     try {
-      await axiosClient.patch(`/api/orders/${orderId}/cancel`);
+      const res = await axiosClient.patch(`/api/orders/${orderId}/cancel`, refundBankInfo ? { refundBankInfo } : {});
+      const needsRefund = res.data?.data?.needsRefund;
       setOrders((prev) =>
-        prev.map((o) => (o._id === orderId ? { ...o, status: "cancelled" } : o))
+        prev.map((o) => (o._id === orderId
+          ? { ...o, status: "cancelled", refundStatus: needsRefund ? "pending_refund" : "none" }
+          : o))
       );
-      toast.success("Đã huỷ đơn hàng");
+      toast.success(needsRefund ? "Đã huỷ đơn. Chúng tôi sẽ hoàn tiền cho bạn sớm." : "Đã huỷ đơn hàng");
     } catch (err) {
       toast.error(err?.response?.data?.message || "Không thể huỷ đơn hàng");
     }

@@ -16,8 +16,8 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Một user chỉ được review một lần cho một sản phẩm trong một đơn hàng
-reviewSchema.index({ productId: 1, userId: 1, orderId: 1 }, { unique: true });
+// Một user chỉ được review một lần cho một sản phẩm (bất kể mua bao nhiêu lần)
+reviewSchema.index({ productId: 1, userId: 1 }, { unique: true });
 reviewSchema.index({ productId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Review", reviewSchema);

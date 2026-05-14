@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
 import axios from "axios";
-import { API_URL } from "../lib/api";
+import axiosClient, { API_URL } from "../lib/api";
+import { getCart } from "../lib/cart";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { AppleLogo } from "../components/icons";
@@ -28,10 +29,13 @@ function EyeIcon({ open }) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  const oauthError = searchParams.get("error");
 
   const validate = () => {
     const e = {};
@@ -78,10 +82,28 @@ export default function LoginPage() {
         email: form.email,
         password: form.password,
       });
-      const { token, user } = res.data;
+      const { token, user, emailVerified } = res.data;
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
+      window.dispatchEvent(new Event("userUpdated"));
+
+      // Merge giỏ hàng localStorage vào server
+      const localCart = getCart();
+      if (localCart.length > 0) {
+        axiosClient.post("/api/cart/merge", {
+          items: localCart.map((i) => ({
+            productId: i.product || i.id,
+            variantId: i.variantId || null,
+            color: i.color || "",
+            quantity: i.quantity || 1,
+          })),
+        }).catch(() => {});
+      }
+
       toast.success("Đăng nhập thành công!");
+      if (emailVerified === false) {
+        toast.warn("Email chưa được xác minh. Vui lòng kiểm tra hộp thư của bạn.", { autoClose: 6000 });
+      }
       navigate("/");
     } catch (err) {
       const msg =
@@ -240,6 +262,28 @@ export default function LoginPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Google OAuth */}
+              <a
+                href={`${API_URL}/api/auth/google`}
+                className="flex w-full items-center justify-center gap-3 rounded-full border border-black/[0.1] bg-white py-3 text-[14px] font-medium text-[#1d1d1f] transition-all hover:bg-[#fafafa] hover:border-black/[0.2] mb-5"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                  <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/>
+                </svg>
+                Tiếp tục bằng Google
+              </a>
+
+              {oauthError && (
+                <p className="mb-4 text-center text-[13px] text-[#e53e3e]">
+                  {oauthError === "oauth_not_configured"
+                    ? "Google OAuth chưa được cấu hình."
+                    : "Đăng nhập Google thất bại. Vui lòng thử lại."}
+                </p>
+              )}
 
               {/* Sign up link */}
               <p className="text-center text-[13px] text-[#6e6e73]">

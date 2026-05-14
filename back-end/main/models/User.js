@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema(
     username: {
       type: String,
       unique: true,
+      sparse: true,
       trim: true,
       minlength: 3,
       maxlength: 30,
@@ -19,6 +20,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       default: null,
+      select: false, // không trả password trừ khi query có +password
     },
     role: {
       type: String,
@@ -28,6 +30,7 @@ const userSchema = new mongoose.Schema(
     googleId: {
       type: String,
       default: null,
+      select: false,
     },
     isVerified: {
       type: Boolean,
@@ -87,6 +90,19 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // ─── Address Book ─────────────────────────────────────────────────────────
+    addresses: [
+      {
+        fullName:  { type: String, trim: true, default: "" },
+        phone:     { type: String, trim: true, default: "" },
+        province:  { type: String, trim: true, default: "" },
+        district:  { type: String, trim: true, default: "" },
+        ward:      { type: String, trim: true, default: "" },
+        street:    { type: String, trim: true, default: "" },
+        isDefault: { type: Boolean, default: false },
+      },
+    ],
 
     // ─── Soft Delete ──────────────────────────────────────────────────────────
     deletedAt: {

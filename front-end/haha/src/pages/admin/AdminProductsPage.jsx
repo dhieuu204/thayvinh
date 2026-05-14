@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { toast } from "react-toastify";
 import axiosClient from "../../lib/api";
 import { ImageWithFallback } from "../../components/ImageWithFallback";
+import { getDisplayPrice } from "../../lib/pricing";
 
 function fmt(n) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n);
@@ -43,9 +44,9 @@ function useProductForm(product) {
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = "Vui lòng nhập tên sản phẩm";
-    if (!form.basePrice || Number(form.basePrice) <= 0) e.basePrice = "Giá phải lớn hơn 0";
-    if (form.salePrice && Number(form.salePrice) >= Number(form.basePrice)) {
-      e.salePrice = "Giá khuyến mãi phải nhỏ hơn giá gốc";
+    if (!form.basePrice || Number(form.basePrice) <= 0) e.basePrice = "Giá nhập phải lớn hơn 0";
+    if (form.salePrice && Number(form.salePrice) < Number(form.basePrice)) {
+      e.salePrice = "Giá bán không được nhỏ hơn giá nhập";
     }
     if (form.saleDiscount) {
       const discountPercent = Number(form.saleDiscount);
@@ -55,7 +56,7 @@ function useProductForm(product) {
         const baseForDiscount = Number(form.salePrice || form.basePrice);
         const finalPrice = baseForDiscount * (1 - discountPercent / 100);
         if (finalPrice < Number(form.basePrice)) {
-          e.saleDiscount = `Giá sau giảm (${fmt(finalPrice)}) không được nhỏ hơn giá gốc (${fmt(form.basePrice)})`;
+          e.saleDiscount = `Giá sau giảm (${fmt(finalPrice)}) không được nhỏ hơn giá nhập (${fmt(form.basePrice)})`;
         }
       }
     }
@@ -74,12 +75,15 @@ const inputCls = (err) =>
 
 /* ── Slide-in Drawer: CHỈ dùng khi THÊM MỚI ── */
 function ProductDrawer({ categories, onClose, onSave }) {
-  const { form, handle, imageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors } = useProductForm(null);
+  const { form, handle, imageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors, setErrors } = useProductForm(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
     setSaving(true);
 
     try {
@@ -149,14 +153,14 @@ function ProductDrawer({ categories, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VNĐ) *</label>
-              <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá nhập (VNĐ) *</label>
+              <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="20000000" className={inputCls(errors.basePrice)} />
               {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
             </div>
 
             <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá khuyến mãi (VNĐ) <span className="text-[#8e8e93]">(phải nhỏ hơn giá gốc)</span></label>
-              <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Để trống nếu không giảm giá" className={inputCls(errors.salePrice)} />
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá bán (VNĐ) <span className="text-[#8e8e93]">(phải lớn hơn giá nhập)</span></label>
+              <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Giá bán ra cho khách" className={inputCls(errors.salePrice)} />
               {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
             </div>
 
@@ -232,14 +236,203 @@ function ProductDrawer({ categories, onClose, onSave }) {
   );
 }
 
+/* ── Variant Manager (dùng trong ProductModal) ── */
+function VariantManager({ productId }) {
+  const [variants, setVariants]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [adding, setAdding]       = useState(false);
+  const [newAttrs, setNewAttrs]   = useState([{ key: "", value: "" }]);
+  const [newStock, setNewStock]   = useState("");
+  const [saving, setSaving]       = useState(false);
+
+  const ATTR_KEYS = ["color", "storage", "size", "ram"];
+  const ATTR_LABELS = { color: "Màu sắc", storage: "Dung lượng", size: "Kích thước", ram: "RAM" };
+
+  const load = () => {
+    setLoading(true);
+    axiosClient.get(`/api/products/${productId}/variants`)
+      .then((r) => {
+        const data = r.data?.data;
+        setVariants(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => {
+        console.error("Load variants error:", err?.response?.data || err.message);
+        toast.error("Không tải được danh sách variants");
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [productId]);
+
+  const handleAddAttrRow = () => setNewAttrs((a) => [...a, { key: "", value: "" }]);
+  const handleRemoveAttrRow = (i) => setNewAttrs((a) => a.filter((_, idx) => idx !== i));
+  const handleAttrChange = (i, field, val) =>
+    setNewAttrs((a) => a.map((row, idx) => idx === i ? { ...row, [field]: val } : row));
+
+  const handleSave = async () => {
+    const validAttrs = newAttrs.filter((r) => r.key.trim() && r.value.trim());
+    if (validAttrs.length === 0) { toast.error("Thêm ít nhất 1 thuộc tính"); return; }
+    setSaving(true);
+    try {
+      const attributes = Object.fromEntries(validAttrs.map((r) => [r.key.trim(), r.value.trim()]));
+      await axiosClient.post(`/api/products/${productId}/variants`, {
+        attributes,
+        stock: Number(newStock) || 0,
+      });
+      toast.success("Đã thêm variant");
+      setNewAttrs([{ key: "", value: "" }]);
+      setNewStock("");
+      setAdding(false);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Thêm thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (variantId) => {
+    if (!confirm("Xoá variant này?")) return;
+    try {
+      await axiosClient.delete(`/api/products/${productId}/variants/${variantId}`);
+      toast.success("Đã xoá");
+      load();
+    } catch {
+      toast.error("Xoá thất bại");
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-black/[0.08] bg-[#fafafa] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[13px] font-semibold text-[#1d1d1f]">Variants ({variants.length})</p>
+        <button
+          type="button"
+          onClick={() => setAdding((v) => !v)}
+          className="flex items-center gap-1.5 rounded-lg border border-black/[0.1] px-3 py-1.5 text-[12px] font-medium text-[#1d1d1f] hover:bg-white transition-colors"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            {adding ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></> : <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>}
+          </svg>
+          {adding ? "Huỷ" : "Thêm variant"}
+        </button>
+      </div>
+
+      {/* Add form */}
+      {adding && (
+        <div className="mb-3 rounded-xl border border-[#0071e3]/30 bg-[#f0f7ff] p-3 space-y-2">
+          <p className="text-[11px] font-semibold text-[#0071e3] uppercase tracking-wide">Thuộc tính</p>
+          {newAttrs.map((row, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                value={row.key}
+                onChange={(e) => handleAttrChange(i, "key", e.target.value)}
+                className="flex-1 rounded-lg border border-black/[0.1] bg-white px-3 py-2 text-[12px] outline-none focus:border-[#0071e3]"
+              >
+                <option value="">Chọn thuộc tính</option>
+                {ATTR_KEYS.map((k) => <option key={k} value={k}>{ATTR_LABELS[k] || k}</option>)}
+                <option value="__custom">Khác...</option>
+              </select>
+              {row.key === "__custom" ? (
+                <input
+                  placeholder="Tên thuộc tính"
+                  onChange={(e) => handleAttrChange(i, "key", e.target.value === "__custom" ? "" : e.target.value)}
+                  className="flex-1 rounded-lg border border-black/[0.1] bg-white px-3 py-2 text-[12px] outline-none focus:border-[#0071e3]"
+                />
+              ) : null}
+              <input
+                placeholder="Giá trị (vd: Black)"
+                value={row.value}
+                onChange={(e) => handleAttrChange(i, "value", e.target.value)}
+                className="flex-[2] rounded-lg border border-black/[0.1] bg-white px-3 py-2 text-[12px] outline-none focus:border-[#0071e3]"
+              />
+              {newAttrs.length > 1 && (
+                <button type="button" onClick={() => handleRemoveAttrRow(i)} className="shrink-0 text-[#e53e3e] hover:opacity-70">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={handleAddAttrRow} className="text-[11px] text-[#0071e3] hover:underline">
+            + Thêm thuộc tính khác
+          </button>
+
+          <div className="pt-1">
+            <p className="mb-1 text-[11px] font-medium text-[#1d1d1f]">Tồn kho</p>
+            <input
+              type="number"
+              value={newStock}
+              onChange={(e) => setNewStock(e.target.value)}
+              placeholder="10"
+              className="w-full rounded-lg border border-black/[0.1] bg-white px-3 py-2 text-[12px] outline-none focus:border-[#0071e3]"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full rounded-xl bg-[#0071e3] py-2 text-[12px] font-semibold text-white hover:bg-[#0077ed] disabled:opacity-60 transition-colors"
+          >
+            {saving ? "Đang lưu..." : "Lưu variant"}
+          </button>
+        </div>
+      )}
+
+      {/* Variant list */}
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#1d1d1f] border-t-transparent" />
+        </div>
+      ) : variants.length === 0 ? (
+        <p className="py-3 text-center text-[12px] text-[#8e8e93]">Chưa có variant nào</p>
+      ) : (
+        <div className="space-y-1.5">
+          {variants.map((v) => {
+            const attrs = v.attributes instanceof Map
+              ? Object.fromEntries(v.attributes)
+              : (v.attributes ?? {});
+            return (
+              <div key={v._id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 border border-black/[0.06]">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap gap-1.5 mb-0.5">
+                    {Object.entries(attrs).map(([k, val]) => (
+                      <span key={k} className="rounded-md bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-[#1d1d1f]">
+                        {ATTR_LABELS[k] || k}: {val}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[12px] text-[#6e6e73]">
+                    Kho: <span className={v.stock <= 0 ? "text-[#e53e3e]" : "text-[#1d8348]"}>{v.stock}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(v._id)}
+                  className="ml-2 shrink-0 flex h-6 w-6 items-center justify-center rounded-md text-[#8e8e93] hover:bg-[#ffe0e0] hover:text-[#e53e3e] transition-colors"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Modal popup: CHỈ dùng khi SỬA ── */
 function ProductModal({ product, categories, onClose, onSave }) {
-  const { form, handle, imageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors } = useProductForm(product);
+  const { form, handle, imageFile, imagePreview, handleImageChange, validate, saving, setSaving, errors, setErrors } = useProductForm(product);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
     setSaving(true);
 
     try {
@@ -278,74 +471,83 @@ function ProductModal({ product, categories, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
-        <div className="flex items-center justify-between border-b border-black/[0.06] px-6 py-4">
+      <div className="flex w-full max-w-lg flex-col max-h-[90vh] rounded-2xl bg-white shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-6 py-4">
           <h2 className="text-[16px] font-semibold text-[#1d1d1f]">Chỉnh sửa sản phẩm</h2>
           <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full text-[#8e8e93] hover:bg-[#f5f5f7]">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Tên sản phẩm *</label>
-            <input name="name" value={form.name} onChange={handle} placeholder="iPhone 17 Pro..." className={inputCls(errors.name)} />
-            {errors.name && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.name}</p>}
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá gốc (VND) *</label>
-            <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="29990000" className={inputCls(errors.basePrice)} />
-            {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
+
+        {/* Scrollable body */}
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Tên sản phẩm *</label>
+              <input name="name" value={form.name} onChange={handle} placeholder="iPhone 17 Pro..." className={inputCls(errors.name)} />
+              {errors.name && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.name}</p>}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá nhập (VND) *</label>
+              <input name="basePrice" type="number" value={form.basePrice} onChange={handle} placeholder="20000000" className={inputCls(errors.basePrice)} />
+              {errors.basePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.basePrice}</p>}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá bán (VND) <span className="text-[#8e8e93]">(phải lớn hơn giá nhập)</span></label>
+              <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Giá bán ra cho khách" className={inputCls(errors.salePrice)} />
+              {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giảm giá (%) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
+              <input name="saleDiscount" type="number" min="0" max="100" value={form.saleDiscount} onChange={handle} placeholder="0-100" className={inputCls(errors.saleDiscount)} />
+              {form.saleDiscount && !errors.saleDiscount && (
+                <p className="mt-1.5 text-[11px] text-[#6e6e73]">
+                  Giá sau giảm: {fmt(Number(form.salePrice || form.basePrice) * (1 - Number(form.saleDiscount) / 100))}
+                </p>
+              )}
+              {errors.saleDiscount && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.saleDiscount}</p>}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
+              <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
+              {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Danh mục *</label>
+              <select name="category" value={form.category} onChange={handle} className={inputCls(errors.category)}>
+                <option value="">Chọn danh mục</option>
+                {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+              </select>
+              {errors.category && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.category}</p>}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Ảnh sản phẩm</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="w-full rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-2.5 text-[13px] file:mr-3 file:border-0 file:bg-[#1d1d1f] file:px-3 file:py-1.5 file:text-white file:text-[11px] file:rounded file:cursor-pointer"
+              />
+              {imagePreview && (
+                <div className="mt-3 flex h-40 items-center justify-center overflow-hidden rounded-lg border border-black/[0.1] bg-[#f5f5f7]">
+                  <ImageWithFallback src={imagePreview} alt="Preview" className="max-h-full w-auto object-contain" />
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Mô tả</label>
+              <textarea name="description" value={form.description} onChange={handle} rows={3} placeholder="Mô tả ngắn..." className={`resize-none ${inputCls(false)}`} />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Variants (màu, dung lượng...)</label>
+              <VariantManager productId={product._id} />
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giá khuyến mãi (VND) <span className="text-[#8e8e93]">(phải nhỏ hơn giá gốc)</span></label>
-            <input name="salePrice" type="number" value={form.salePrice} onChange={handle} placeholder="Để trống nếu không giảm giá" className={inputCls(errors.salePrice)} />
-            {errors.salePrice && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.salePrice}</p>}
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Giảm giá (%) <span className="text-[#8e8e93]">(tùy chọn)</span></label>
-            <input name="saleDiscount" type="number" min="0" max="100" value={form.saleDiscount} onChange={handle} placeholder="0-100" className={inputCls(errors.saleDiscount)} />
-            {form.saleDiscount && !errors.saleDiscount && (
-              <p className="mt-1.5 text-[11px] text-[#6e6e73]">
-                Giá sau giảm: {fmt(Number(form.salePrice || form.basePrice) * (1 - Number(form.saleDiscount) / 100))}
-              </p>
-            )}
-            {errors.saleDiscount && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.saleDiscount}</p>}
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Số lượng kho *</label>
-            <input name="stock" type="number" value={form.stock} onChange={handle} placeholder="100" className={inputCls(errors.stock)} />
-            {errors.stock && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.stock}</p>}
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Danh mục *</label>
-            <select name="category" value={form.category} onChange={handle} className={inputCls(errors.category)}>
-              <option value="">Chọn danh mục</option>
-              {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-            </select>
-            {errors.category && <p className="mt-1 text-[11px] text-[#e53e3e]">{errors.category}</p>}
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Ảnh sản phẩm</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="w-full rounded-xl border border-black/[0.1] bg-[#fafafa] px-4 py-2.5 text-[13px] file:mr-3 file:border-0 file:bg-[#1d1d1f] file:px-3 file:py-1.5 file:text-white file:text-[11px] file:rounded file:cursor-pointer"
-            />
-            {imagePreview && (
-              <div className="mt-3 rounded-lg overflow-hidden border border-black/[0.1]">
-                <img src={imagePreview} alt="Preview" className="w-full h-40 object-cover" />
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1d1d1f]">Mô tả</label>
-            <textarea name="description" value={form.description} onChange={handle} rows={3} placeholder="Mô tả ngắn..." className={`resize-none ${inputCls(false)}`} />
-          </div>
-          <div className="flex justify-end gap-3 pt-1">
+          {/* Footer cố định */}
+          <div className="shrink-0 border-t border-black/[0.06] px-6 py-4 flex justify-end gap-3 bg-white">
             <button type="button" onClick={onClose} className="rounded-full border border-black/[0.1] px-5 py-2.5 text-sm text-[#3a3a3c] hover:bg-[#f5f5f7] transition-colors">Huỷ</button>
             <button type="submit" disabled={saving} className="rounded-full bg-[#1d1d1f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#3d3d3f] disabled:opacity-60 transition-colors">
               {saving ? "Đang lưu..." : "Lưu thay đổi"}
@@ -466,8 +668,16 @@ export default function AdminProductsPage() {
                     </td>
                     <td className="px-4 py-3 text-[13px] text-[#6e6e73]">{p.category?.name || "—"}</td>
                     <td className="px-4 py-3">
-                      <p className="text-[13px] font-semibold text-[#1d1d1f]">{fmt(p.salePrice || p.basePrice)}</p>
-                      {p.salePrice && <p className="text-[11px] text-[#8e8e93] line-through">{fmt(p.basePrice)}</p>}
+                      {(() => {
+                        const dp = getDisplayPrice(p);
+                        return (
+                          <>
+                            <p className="text-[13px] font-semibold text-[#1d1d1f]">{fmt(dp.price)}</p>
+                            {dp.oldPrice && <p className="text-[11px] text-[#8e8e93] line-through">{fmt(dp.oldPrice)}</p>}
+                            <p className="text-[10px] text-[#8e8e93]">Nhập: {fmt(p.basePrice)}</p>
+                          </>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-[13px] font-medium ${p.stock <= 5 ? "text-[#e53e3e]" : p.stock <= 10 ? "text-[#c2410c]" : "text-[#1d1d1f]"}`}>

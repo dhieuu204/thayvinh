@@ -8,7 +8,9 @@ import Breadcrumb from "../components/Breadcrumb";
 import { ImageWithFallback } from "../components/ImageWithFallback";
 import { staggerContainer, staggerItem } from "../lib/animations";
 import { API_URL } from "../lib/api";
+import { getDisplayPrice } from "../lib/pricing";
 import { AppleLogo } from "../components/icons";
+import { formatCurrency } from "../lib/format";
 
 const SF_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif";
 
@@ -33,19 +35,11 @@ const SORT_OPTIONS = [
 ];
 
 
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+
 
 function ProductCard({ product }) {
   const image = product.images?.[0]?.url;
-  const price = product.salePrice || product.basePrice;
-  const oldPrice = product.salePrice ? product.basePrice : null;
-  const discount = oldPrice ? Math.round((1 - price / oldPrice) * 100) : null;
+  const { price, oldPrice, discount } = getDisplayPrice(product);
 
   return (
     <motion.article
@@ -70,12 +64,14 @@ function ProductCard({ product }) {
           <h3 className="line-clamp-2 min-h-[40px] text-[15px] font-medium text-[#1d1d1f]">{product.name}</h3>
           <div className="mt-2 flex flex-col items-center justify-center gap-1.5">
             <span className="text-[16px] font-bold text-[#1d1d1f]">{formatCurrency(price)}</span>
-            {oldPrice && (
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] text-[#8e8e93] line-through">{formatCurrency(oldPrice)}</span>
-                {discount && <span className="text-[13px] text-[#e53e3e]">-{discount}%</span>}
-              </div>
-            )}
+            <div className={`flex items-center gap-2 ${oldPrice ? "" : "invisible"}`}>
+              <span className="text-[13px] text-[#8e8e93] line-through">
+                {oldPrice ? formatCurrency(oldPrice) : "0"}
+              </span>
+              <span className="text-[13px] text-[#e53e3e]">
+                {discount ? `-${discount}%` : "-0%"}
+              </span>
+            </div>
           </div>
         </div>
       </Link>

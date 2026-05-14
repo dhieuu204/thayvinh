@@ -11,14 +11,10 @@ import { staggerContainer, staggerItem } from "../lib/animations";
 import { addToCart } from "../lib/cart";
 import { isInWishlist, toggleWishlist } from "../lib/wishlist";
 import { API_URL } from "../lib/api";
+import { getDisplayPrice } from "../lib/pricing";
+import { formatCurrency } from "../lib/format";
 
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+const HIDDEN_ATTR_KEYS = new Set(["colorHex"]);
 
 const PROMOS = [
   "Giảm 5% tối đa 200.000đ khi thanh toán qua Kredivo",
@@ -37,8 +33,7 @@ const POLICIES = [
 
 function SimilarProductCard({ product }) {
   const image = product.images?.[0]?.url;
-  const price = product.salePrice || product.basePrice;
-  const oldPrice = product.salePrice ? product.basePrice : null;
+  const { price, oldPrice, discount } = getDisplayPrice(product);
 
   return (
     <motion.article
@@ -61,9 +56,9 @@ function SimilarProductCard({ product }) {
               <span className="text-xs text-[#8e8e93] line-through">{formatCurrency(oldPrice)}</span>
             )}
           </div>
-          {oldPrice && (
+          {discount != null && (
             <p className="mt-0.5 text-xs font-medium text-[#0071e3]">
-              Giảm {Math.round((1 - price / oldPrice) * 100)}%
+              Giảm {discount}%
             </p>
           )}
         </div>
@@ -79,6 +74,8 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState(null);
   const [similar, setSimilar] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [variants, setVariants] = useState([]);
+  const [selectedAttrs, setSelectedAttrs] = useState({});
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [promoOpen, setPromoOpen] = useState(true);
   const [qty, setQty] = useState(1);
@@ -92,24 +89,46 @@ export default function ProductDetailPage() {
   const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
+    const ctrl = new AbortController();
+    const signal = ctrl.signal;
     setLoading(true);
     Promise.all([
-      fetch(`${API_URL}/api/products/${id}`).then((r) => r.json()),
-      fetch(`${API_URL}/api/products/${id}/related`).then((r) => r.json()),
-      fetch(`${API_URL}/api/reviews/product/${id}`).then((r) => r.json()),
+      fetch(`${API_URL}/api/products/${id}`, { signal }).then((r) => r.json()),
+      fetch(`${API_URL}/api/products/${id}/related`, { signal }).then((r) => r.json()),
+      fetch(`${API_URL}/api/reviews/product/${id}`, { signal }).then((r) => r.json()),
+      fetch(`${API_URL}/api/products/${id}/variants`, { signal }).then((r) => r.json()),
     ])
-      .then(([prodJson, relJson, revJson]) => {
+      .then(([prodJson, relJson, revJson, varJson]) => {
         const p = prodJson.data;
         setProduct(p);
         setSelectedVariant(null);
+        setSelectedAttrs({});
         setWishlisted(isInWishlist(p?._id));
         setSimilar(relJson.data || []);
         setReviews(revJson.data?.reviews || []);
         setAvgRating(revJson.data?.avgRating || 0);
+        setVariants(varJson.data || []);
       })
-      .catch(() => setProduct(null))
-      .finally(() => setLoading(false));
+      .catch((err) => { if (err.name !== "AbortError") setProduct(null); })
+      .finally(() => { if (!signal.aborted) setLoading(false); });
+    return () => ctrl.abort();
   }, [id]);
+
+  // Khi chọn attribute, tìm variant khớp — bỏ qua HIDDEN_ATTR_KEYS (colorHex không có trong UI)
+  useEffect(() => {
+    if (variants.length === 0) return;
+    const visibleKeys = [...new Set(variants.flatMap((v) => {
+      const attrs = v.attributes instanceof Map ? Object.fromEntries(v.attributes) : (v.attributes ?? {});
+      return Object.keys(attrs).filter((k) => !HIDDEN_ATTR_KEYS.has(k));
+    }))];
+    const allSelected = visibleKeys.length > 0 && visibleKeys.every((k) => selectedAttrs[k]);
+    if (!allSelected) { setSelectedVariant(null); return; }
+    const matched = variants.find((v) => {
+      const attrs = v.attributes instanceof Map ? Object.fromEntries(v.attributes) : (v.attributes ?? {});
+      return visibleKeys.every((k) => attrs[k] === selectedAttrs[k]);
+    });
+    setSelectedVariant(matched || null);
+  }, [selectedAttrs, variants]);
 
   // Get current user ID from token
   useEffect(() => {
@@ -147,23 +166,42 @@ export default function ProductDetailPage() {
   }, [product]);
 
   const handleAddToCart = () => {
-    const image = product.images?.[0]?.url;
-    const price = product.salePrice || product.basePrice;
-    addToCart({ id: product._id, name: product.name, image, price, variant: selectedVariant, quantity: qty });
+    const stock = selectedVariant ? selectedVariant.stock : product.stock;
+    if (qty > stock) {
+      toast.error(`Chỉ còn ${stock} sản phẩm trong kho!`);
+      return;
+    }
+    const { price: effectivePrice } = getDisplayPrice(product, selectedVariant);
+    const img = product.images?.[0]?.url;
+    addToCart({
+      id: product._id,
+      name: product.name,
+      image: img,
+      price: effectivePrice,
+      variant: selectedVariant,
+      variantId: selectedVariant?._id ?? null,
+      quantity: qty,
+    });
     toast.success("Đã thêm vào giỏ hàng!");
   };
 
   const handleBuyNow = () => {
-    const image = product.images?.[0]?.url;
-    const price = product.salePrice || product.basePrice;
+    const stock = selectedVariant ? selectedVariant.stock : product.stock;
+    if (qty > stock) {
+      toast.error(`Chỉ còn ${stock} sản phẩm trong kho!`);
+      return;
+    }
+    const { price: effectivePrice } = getDisplayPrice(product, selectedVariant);
+    const img = product.images?.[0]?.url;
     navigate("/checkout", {
       state: {
         directBuy: [{
           id: product._id,
           name: product.name,
-          image,
-          price,
+          image: img,
+          price: effectivePrice,
           variant: selectedVariant,
+          variantId: selectedVariant?._id ?? null,
           color: null,
           quantity: qty,
         }],
@@ -277,9 +315,28 @@ export default function ProductDetailPage() {
   }
 
   const image = product.images?.[0]?.url;
-  const price = product.salePrice || product.basePrice;
-  const oldPrice = product.salePrice ? product.basePrice : null;
-  const discount = oldPrice ? Math.round((1 - price / oldPrice) * 100) : null;
+  const { price: displayPrice, oldPrice, discount } = getDisplayPrice(product, selectedVariant);
+  const displayStock = selectedVariant ? selectedVariant.stock : product.stock;
+
+  // Nhóm variants theo attribute key để render selector
+  const attrKeys = [...new Set(variants.flatMap((v) => {
+    const attrs = v.attributes instanceof Map ? Object.fromEntries(v.attributes) : (v.attributes ?? {});
+    return Object.keys(attrs).filter((k) => !HIDDEN_ATTR_KEYS.has(k));
+  }))];
+  const attrOptions = attrKeys.reduce((acc, key) => {
+    acc[key] = [...new Set(variants.map((v) => {
+      const attrs = v.attributes instanceof Map ? Object.fromEntries(v.attributes) : (v.attributes ?? {});
+      return attrs[key];
+    }).filter(Boolean))];
+    return acc;
+  }, {});
+  const attrLabel = { color: "Màu sắc", storage: "Dung lượng", size: "Kích thước", ram: "RAM" };
+
+  const hasVariants = attrKeys.length > 0;
+  const allAttrsSelected = hasVariants && attrKeys.every((k) => selectedAttrs[k]);
+  const canBuy = hasVariants
+    ? allAttrsSelected && selectedVariant != null && selectedVariant.stock > 0
+    : product.stock > 0;
 
   return (
     <div
@@ -343,7 +400,7 @@ export default function ProductDetailPage() {
               {/* Price */}
               <div className="mb-5 flex items-baseline gap-3">
                 <span className="font-bold text-[#1d1d1f]" style={{ fontSize: "clamp(22px, 3vw, 30px)" }}>
-                  {formatCurrency(price)}
+                  {formatCurrency(displayPrice)}
                 </span>
                 {oldPrice && (
                   <>
@@ -358,8 +415,8 @@ export default function ProductDetailPage() {
               {/* Stock */}
               <p className="mb-4 text-sm text-[#6e6e73]">
                 Còn lại:{" "}
-                <span className={`font-medium ${product.stock > 0 ? "text-[#1d8348]" : "text-[#e53e3e]"}`}>
-                  {product.stock > 0 ? `${product.stock} sản phẩm` : "Hết hàng"}
+                <span className={`font-medium ${displayStock > 0 ? "text-[#1d8348]" : "text-[#e53e3e]"}`}>
+                  {displayStock > 0 ? `${displayStock} sản phẩm` : "Hết hàng"}
                 </span>
               </p>
 
@@ -407,6 +464,59 @@ export default function ProductDetailPage() {
                 ))}
               </ul>
 
+              {/* Variant Selector */}
+              {attrKeys.length > 0 && (
+                <div className="mb-5 space-y-4">
+                  {attrKeys.map((key) => (
+                    <div key={key}>
+                      <p className="mb-2 text-sm font-medium text-[#1d1d1f]">
+                        {attrLabel[key] || key}:
+                        {selectedAttrs[key] && (
+                          <span className="ml-1.5 font-normal text-[#6e6e73]">{selectedAttrs[key]}</span>
+                        )}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {attrOptions[key]?.map((val) => {
+                          const isSelected = selectedAttrs[key] === val;
+                          // Kiểm tra xem option này có variant còn hàng không
+                          const hasStock = variants.some((v) => {
+                            const attrs = v.attributes instanceof Map
+                              ? Object.fromEntries(v.attributes)
+                              : (v.attributes ?? {});
+                            return attrs[key] === val && v.stock > 0;
+                          });
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setSelectedAttrs((prev) => ({ ...prev, [key]: prev[key] === val ? undefined : val }))}
+                              disabled={!hasStock}
+                              className={`relative rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 active:scale-95
+                                ${isSelected
+                                  ? "border-[#1d1d1f] bg-[#1d1d1f] text-white"
+                                  : hasStock
+                                    ? "border-black/[0.15] text-[#1d1d1f] hover:border-[#1d1d1f]"
+                                    : "cursor-not-allowed border-black/[0.08] text-[#c7c7cc] line-through"
+                                }`}
+                            >
+                              {val}
+                              {!hasStock && (
+                                <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#e53e3e] text-[8px] font-bold text-white">
+                                  !
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  {attrKeys.every((k) => selectedAttrs[k]) && !selectedVariant && (
+                    <p className="text-sm text-[#e53e3e]">Phiên bản này tạm thời hết hàng.</p>
+                  )}
+                </div>
+              )}
+
               {/* Qty */}
               <div className="mb-5 flex items-center gap-3">
                 <span className="text-sm font-medium text-[#1d1d1f]">Số lượng:</span>
@@ -416,8 +526,9 @@ export default function ProductDetailPage() {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </button>
                   <span className="min-w-[32px] text-center text-sm font-semibold text-[#1d1d1f]">{qty}</span>
-                  <button type="button" onClick={() => setQty((q) => q + 1)}
-                    className="flex h-9 w-9 cursor-pointer items-center justify-center text-[#1d1d1f] transition-colors duration-150 hover:text-[#0071e3] active:scale-90">
+                  <button type="button" onClick={() => setQty((q) => Math.min(displayStock, q + 1))}
+                    disabled={qty >= displayStock}
+                    className="flex h-9 w-9 cursor-pointer items-center justify-center text-[#1d1d1f] transition-colors duration-150 hover:text-[#0071e3] active:scale-90 disabled:cursor-not-allowed disabled:opacity-40">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </button>
                 </div>
@@ -425,14 +536,17 @@ export default function ProductDetailPage() {
 
               {/* Actions */}
               <div className="flex flex-col gap-3">
+                {hasVariants && !allAttrsSelected && (
+                  <p className="text-sm text-[#f59e0b] font-medium">Vui lòng chọn đầy đủ phiên bản trước khi mua.</p>
+                )}
                 <motion.button type="button" whileTap={{ scale: 0.985 }} onClick={handleBuyNow}
-                  disabled={product.stock === 0}
+                  disabled={!canBuy}
                   className="w-full cursor-pointer rounded-full bg-[#1d1d1f] py-4 text-[15px] font-semibold text-white transition-all duration-200 hover:bg-[#3d3d3f] disabled:cursor-not-allowed disabled:opacity-50">
                   MUA NGAY
                 </motion.button>
                 <div className="grid grid-cols-2 gap-3">
                   <motion.button type="button" whileTap={{ scale: 0.985 }} onClick={handleAddToCart}
-                    disabled={product.stock === 0}
+                    disabled={!canBuy}
                     className="cursor-pointer rounded-full border border-[#1d1d1f] py-3 text-sm font-medium text-[#1d1d1f] transition-all duration-200 hover:bg-[#1d1d1f] hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
                     Thêm vào giỏ
                   </motion.button>

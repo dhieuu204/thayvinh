@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { ImageWithFallback } from "../components/ImageWithFallback";
 import { staggerContainer, staggerItem } from "../lib/animations";
 import { API_URL } from "../lib/api";
+import { getDisplayPrice } from "../lib/pricing";
+import { formatCurrency } from "../lib/format";
 
 const PAGE_SIZE = 9;
 
@@ -17,18 +19,9 @@ const SORT_OPTIONS = [
   { value: "price_desc",  label: "Giá ↓",       api: "price_desc" },
 ];
 
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function ProductCard({ product }) {
   const image = product.images?.[0]?.url;
-  const price = product.salePrice || product.basePrice;
-  const oldPrice = product.salePrice ? product.basePrice : null;
+  const { price, oldPrice, discount } = getDisplayPrice(product);
 
   return (
     <motion.article
@@ -47,9 +40,9 @@ function ProductCard({ product }) {
               Flash Sale
             </span>
           )}
-          {oldPrice && (
+          {discount != null && (
             <span className="absolute right-3 top-3 rounded-full bg-[#fff1f0] px-2 py-0.5 text-xs font-semibold text-[#e53e3e]">
-              -{Math.round((1 - price / oldPrice) * 100)}%
+              -{discount}%
             </span>
           )}
         </div>
@@ -61,15 +54,13 @@ function ProductCard({ product }) {
             <p className="text-[15px] font-bold text-[#1d1d1f]">
               {formatCurrency(price)}
             </p>
-            {oldPrice && (
-              <p className="text-xs text-[#8e8e93] line-through">
-                {formatCurrency(oldPrice)}
-              </p>
-            )}
+            <p className={`text-xs text-[#8e8e93] line-through ${oldPrice ? "" : "invisible"}`}>
+              {oldPrice ? formatCurrency(oldPrice) : "0"}
+            </p>
           </div>
-          {oldPrice && (
-            <p className="mt-1 text-xs font-medium text-[#0071e3]">Online giá rẻ quá</p>
-          )}
+          <p className={`mt-1 text-xs font-medium ${oldPrice ? "text-[#0071e3]" : "invisible"}`}>
+            Online giá rẻ quá
+          </p>
         </div>
       </Link>
     </motion.article>
@@ -99,12 +90,15 @@ function Pagination({ currentPage, totalPages, onPageChange }) {
 }
 
 export default function ProductsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") || "";
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
   const [loading, setLoading] = useState(true);
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
@@ -117,6 +111,9 @@ export default function ProductsPage() {
       .catch(() => {});
   }, []);
 
+  // Đổi query URL -> reset về trang 1
+  useEffect(() => { setCurrentPage(1); }, [urlQuery]);
+
   // Lấy sản phẩm từ API
   useEffect(() => {
     setLoading(true);
@@ -127,6 +124,7 @@ export default function ProductsPage() {
     });
     if (priceMin) params.set("minPrice", priceMin);
     if (priceMax) params.set("maxPrice", priceMax);
+    if (urlQuery) params.set("search", urlQuery);
 
     let url;
     if (selectedCategory === "all") {
@@ -142,10 +140,11 @@ export default function ProductsPage() {
         const data = json.data;
         setProducts(data.products || []);
         setTotalPages(data.pagination?.totalPages || 1);
+        setTotalResults(data.pagination?.total || 0);
       })
-      .catch(() => setProducts([]))
+      .catch(() => { setProducts([]); setTotalResults(0); })
       .finally(() => setLoading(false));
-  }, [selectedCategory, sortBy, currentPage, priceMin, priceMax]);
+  }, [selectedCategory, sortBy, currentPage, priceMin, priceMax, urlQuery]);
 
   const handleCategoryChange = (slug) => {
     setSelectedCategory(slug);
@@ -190,6 +189,30 @@ export default function ProductsPage() {
         </section>
 
         <section className="mx-auto mt-4 max-w-[1200px] px-4 md:px-8">
+          {/* Search result banner */}
+          {urlQuery && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+              <div>
+                <p className="text-[13px] text-[#6e6e73]">Kết quả tìm kiếm cho</p>
+                <p className="text-[16px] font-semibold text-[#1d1d1f]">
+                  "{urlQuery}"
+                  {!loading && (
+                    <span className="ml-2 text-[13px] font-normal text-[#8e8e93]">
+                      · {totalResults} sản phẩm
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchParams({})}
+                className="shrink-0 rounded-full border border-black/[0.1] px-4 py-1.5 text-[13px] text-[#3a3a3c] hover:bg-[#f5f5f7] transition-colors"
+              >
+                Xoá tìm kiếm
+              </button>
+            </div>
+          )}
+
           {/* Toolbar */}
           <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
             {/* Category filter */}
@@ -284,13 +307,20 @@ export default function ProductsPage() {
               <h2 className="text-[#1d1d1f]" style={{ fontSize: "22px", fontWeight: 600 }}>
                 Không tìm thấy sản phẩm
               </h2>
-              <p className="mt-2 text-sm text-[#6e6e73]">Thử chọn danh mục khác.</p>
+              <p className="mt-2 text-sm text-[#6e6e73]">
+                {urlQuery
+                  ? `Không có sản phẩm nào khớp với "${urlQuery}". Thử từ khoá khác hoặc xoá bộ lọc.`
+                  : "Thử chọn danh mục khác."}
+              </p>
               <button
                 type="button"
-                onClick={handleResetFilters}
+                onClick={() => {
+                  if (urlQuery) setSearchParams({});
+                  handleResetFilters();
+                }}
                 className="mt-5 cursor-pointer rounded-full border border-[#1d1d1f] px-5 py-2.5 text-sm text-[#1d1d1f] transition-all duration-200 hover:bg-[#1d1d1f] hover:text-white active:scale-95"
               >
-                Reset bộ lọc
+                {urlQuery ? "Xoá tìm kiếm & bộ lọc" : "Reset bộ lọc"}
               </button>
             </div>
           ) : (

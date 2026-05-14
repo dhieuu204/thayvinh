@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "react-toastify";
 import axiosClient from "../../lib/api";
 function fmt(n) {
@@ -8,16 +8,31 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-const STATUSES = ["", "Pending", "Confirmed", "Shipped", "Delivered", "Cancelled"];
-const STATUS_VN = { "": "Tất cả", Pending: "Chờ xác nhận", Confirmed: "Đã xác nhận", Shipped: "Đang giao", Delivered: "Đã giao", Cancelled: "Đã huỷ" };
+const STATUSES = ["", "PendingPayment", "Pending", "Confirmed", "Shipped", "Delivered", "Cancelled"];
+const STATUS_VN = {
+  "": "Tất cả",
+  PendingPayment: "Đã TT · Chờ xác nhận",
+  Pending:   "Chờ xác nhận",
+  Confirmed: "Đã xác nhận",
+  Shipped:   "Đang giao",
+  Delivered: "Đã giao",
+  Cancelled: "Đã huỷ",
+};
 const STATUS_COLOR = {
+  PendingPayment: "bg-[#fef3c7] text-[#92400e] border-[#fde68a]",
   Pending:   "bg-[#fff7ed] text-[#c2410c] border-[#fed7aa]",
   Confirmed: "bg-[#eff6ff] text-[#1d4ed8] border-[#bfdbfe]",
   Shipped:   "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]",
   Delivered: "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]",
   Cancelled: "bg-[#fef2f2] text-[#dc2626] border-[#fecaca]",
 };
+const REFUND_COLOR = {
+  pending_refund: "bg-[#fef3c7] text-[#92400e] border-[#fde68a]",
+  refunded:       "bg-[#f0fdf4] text-[#15803d] border-[#bbf7d0]",
+};
+const REFUND_VN = { pending_refund: "Chờ hoàn tiền", refunded: "Đã hoàn tiền" };
 const NEXT_STATUS = {
+  PendingPayment: ["Cancelled"],
   Pending:   ["Confirmed", "Cancelled"],
   Confirmed: ["Shipped", "Cancelled"],
   Shipped:   ["Delivered"],
@@ -33,9 +48,9 @@ function StatusBadge({ status }) {
   );
 }
 
-function OrderRow({ order, onStatusChange }) {
-  const [expanded, setExpanded] = useState(false);
-  const [updating, setUpdating] = useState(false);
+function OrderRow({ order, onStatusChange, onOrderUpdate }) {
+  const [expanded, setExpanded]   = useState(false);
+  const [updating, setUpdating]   = useState(false);
   const nexts = NEXT_STATUS[order.status] || [];
 
   const handleUpdate = async (newStatus) => {
@@ -50,6 +65,34 @@ function OrderRow({ order, onStatusChange }) {
       setUpdating(false);
     }
   };
+
+  const handleConfirmPayment = async () => {
+    setUpdating(true);
+    try {
+      await axiosClient.patch(`/api/orders/${order._id}/confirm-payment`);
+      onOrderUpdate(order._id, { status: "Confirmed", paidAt: new Date().toISOString() });
+      toast.success("Đã xác nhận thanh toán");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Xác nhận thất bại");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleMarkRefunded = async () => {
+    setUpdating(true);
+    try {
+      await axiosClient.patch(`/api/orders/${order._id}/mark-refunded`);
+      onOrderUpdate(order._id, { refundStatus: "refunded" });
+      toast.success("Đã đánh dấu hoàn tiền");
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Cập nhật thất bại");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const showRefundInfo = order.refundStatus === "pending_refund" && order.refundBankInfo?.accountNumber;
 
   return (
     <>
@@ -66,9 +109,40 @@ function OrderRow({ order, onStatusChange }) {
           <p className="text-[13px] font-semibold text-[#1d1d1f]">{fmt(order.total)}</p>
           <p className="text-[11px] text-[#8e8e93]">{order.products?.length || 0} sản phẩm</p>
         </td>
-        <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
+        <td className="px-4 py-3">
+          <div className="flex flex-col gap-1 items-start">
+            <StatusBadge status={order.status} />
+            {order.refundStatus && order.refundStatus !== "none" && (
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${REFUND_COLOR[order.refundStatus] || ""}`}>
+                {REFUND_VN[order.refundStatus]}
+              </span>
+            )}
+          </div>
+        </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Xác nhận thanh toán CK */}
+            {order.status === "PendingPayment" && (
+              <button
+                type="button"
+                disabled={updating}
+                onClick={handleConfirmPayment}
+                className="rounded-full bg-[#16a34a] px-2.5 py-1 text-[11px] font-medium text-white transition-all hover:bg-[#15803d] disabled:opacity-50"
+              >
+                Xác nhận thanh toán
+              </button>
+            )}
+            {/* Đã hoàn tiền */}
+            {order.refundStatus === "pending_refund" && (
+              <button
+                type="button"
+                disabled={updating}
+                onClick={handleMarkRefunded}
+                className="rounded-full bg-[#2563eb] px-2.5 py-1 text-[11px] font-medium text-white transition-all hover:bg-[#1d4ed8] disabled:opacity-50"
+              >
+                Đã hoàn tiền
+              </button>
+            )}
             {nexts.map((s) => (
               <button
                 key={s}
@@ -106,19 +180,67 @@ function OrderRow({ order, onStatusChange }) {
                       <span className="text-[#6e6e73]">×{p.quantity}</span>
                       <span className="text-[#1d1d1f]">{p.product?.name || "Sản phẩm"}</span>
                       <span className="ml-auto font-medium text-[#1d1d1f]">
-                        {fmt((p.product?.salePrice || p.product?.basePrice || 0) * p.quantity)}
+                        {fmt((p.priceAtOrder ?? p.product?.salePrice ?? p.product?.basePrice ?? 0) * p.quantity)}
                       </span>
                     </div>
                   ))}
                 </div>
+                <div className="mt-2 space-y-1 border-t border-black/[0.06] pt-2 text-[12px]">
+                  {order.discountAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-[#6e6e73]">Giảm giá{order.voucherCode ? ` (${order.voucherCode})` : ""}</span>
+                      <span className="text-[#16a34a]">-{fmt(order.discountAmount)}</span>
+                    </div>
+                  )}
+                  {order.shippingFee != null && (
+                    <div className="flex justify-between">
+                      <span className="text-[#6e6e73]">Phí vận chuyển</span>
+                      <span>{order.shippingFee === 0 ? "Miễn phí" : fmt(order.shippingFee)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold">
+                    <span>Tổng cộng</span><span>{fmt(order.total)}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="mb-2 text-[12px] font-semibold text-[#1d1d1f]">Địa chỉ giao hàng</p>
-                <p className="text-[12px] text-[#3a3a3c]">{order.billingInfo?.fullName} · {order.billingInfo?.phone}</p>
-                <p className="text-[12px] text-[#6e6e73]">
-                  {[order.billingInfo?.street, order.billingInfo?.district, order.billingInfo?.city].filter(Boolean).join(", ")}
-                </p>
-                <p className="mt-1 text-[12px] text-[#6e6e73]">Thanh toán: <span className="font-medium text-[#1d1d1f]">{order.paymentMethod?.toUpperCase()}</span></p>
+              <div className="space-y-3">
+                <div>
+                  <p className="mb-1 text-[12px] font-semibold text-[#1d1d1f]">Địa chỉ giao hàng</p>
+                  <p className="text-[12px] text-[#3a3a3c]">{order.billingInfo?.fullName} · {order.billingInfo?.phone}</p>
+                  <p className="text-[12px] text-[#6e6e73]">
+                    {[order.billingInfo?.street, order.billingInfo?.district, order.billingInfo?.city].filter(Boolean).join(", ")}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[#6e6e73]">
+                    Thanh toán: <span className="font-medium text-[#1d1d1f]">{order.paymentMethod?.toUpperCase() || "—"}</span>
+                    {order.paidAt && <span className="ml-1 text-[#16a34a]">(Đã nhận {fmtDate(order.paidAt)})</span>}
+                  </p>
+                </div>
+
+                {/* Thông tin hoàn tiền */}
+                {showRefundInfo && (
+                  <div className="rounded-xl border border-[#fde68a] bg-[#fffbf0] p-3 text-[12px]">
+                    <p className="mb-1.5 font-semibold text-[#92400e]">Tài khoản nhận hoàn tiền</p>
+                    {[
+                      ["Ngân hàng", order.refundBankInfo.bankName],
+                      ["Số TK", order.refundBankInfo.accountNumber],
+                      ["Chủ TK", order.refundBankInfo.accountHolder],
+                    ].map(([label, val]) => val && (
+                      <div key={label} className="flex justify-between">
+                        <span className="text-[#78350f]">{label}</span>
+                        <span className="font-medium text-[#1d1d1f]">{val}</span>
+                      </div>
+                    ))}
+                    <p className="mt-1.5 font-semibold text-[#c2410c]">
+                      Cần hoàn: {fmt(order.total)}
+                    </p>
+                  </div>
+                )}
+                {order.refundStatus === "refunded" && order.refundBankInfo?.refundedAt && (
+                  <p className="text-[12px] text-[#16a34a]">
+                    Đã hoàn tiền lúc {fmtDate(order.refundBankInfo.refundedAt)}
+                    {order.refundBankInfo.refundNote && ` — ${order.refundBankInfo.refundNote}`}
+                  </p>
+                )}
               </div>
             </div>
           </td>
@@ -131,15 +253,18 @@ function OrderRow({ order, onStatusChange }) {
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const searchTimer = useRef(null);
 
   const load = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ page, limit: 15 });
     if (status) params.set("status", status);
+    if (search.trim()) params.set("search", search.trim());
     axiosClient
       .get(`/api/admin/orders?${params}`)
       .then((res) => {
@@ -149,13 +274,17 @@ export default function AdminOrdersPage() {
       })
       .catch(() => toast.error("Không tải được danh sách đơn hàng"))
       .finally(() => setLoading(false));
-  }, [status, page]);
+  }, [status, page, search]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setPage(1); }, [status]);
+  useEffect(() => { setPage(1); }, [status, search]);
 
   const handleStatusChange = (orderId, newStatus) => {
     setOrders((prev) => prev.map((o) => o._id === orderId ? { ...o, status: newStatus } : o));
+  };
+
+  const handleOrderUpdate = (orderId, patch) => {
+    setOrders((prev) => prev.map((o) => o._id === orderId ? { ...o, ...patch } : o));
   };
 
   return (
@@ -164,6 +293,20 @@ export default function AdminOrdersPage() {
         <div>
           <h1 className="text-[22px] font-semibold text-[#1d1d1f]">Quản lý đơn hàng</h1>
           <p className="text-sm text-[#8e8e93]">{total} đơn hàng</p>
+        </div>
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8e8e93]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              clearTimeout(searchTimer.current);
+              const v = e.target.value;
+              searchTimer.current = setTimeout(() => setSearch(v), 400);
+            }}
+            placeholder="Tìm tên khách, email..."
+            className="rounded-xl border border-black/[0.1] bg-white py-2 pl-8 pr-4 text-[13px] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 w-56"
+          />
         </div>
       </div>
 
@@ -203,7 +346,7 @@ export default function AdminOrdersPage() {
               </thead>
               <tbody>
                 {orders.map((o) => (
-                  <OrderRow key={o._id} order={o} onStatusChange={handleStatusChange} />
+                  <OrderRow key={o._id} order={o} onStatusChange={handleStatusChange} onOrderUpdate={handleOrderUpdate} />
                 ))}
               </tbody>
             </table>

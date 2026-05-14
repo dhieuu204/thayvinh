@@ -77,7 +77,7 @@ function FlashSaleModal({ flashSale, products, onClose, onSave }) {
     const product = products.find((p) => p._id === newProd.productId);
     const fp = flashPrice(product, newProd.discountType, Number(newProd.discountValue));
     if (fp < (product?.basePrice || 0)) {
-      toast.error(`Giá flash sale (${fmt(fp)}) thấp hơn giá gốc (${fmt(product?.basePrice)})`);
+      toast.error(`Giá flash sale (${fmt(fp)}) thấp hơn giá nhập (${fmt(product?.basePrice)})`);
       return;
     }
     if (fsProducts.some((p) => (p.productId?._id || p.productId) === newProd.productId)) {

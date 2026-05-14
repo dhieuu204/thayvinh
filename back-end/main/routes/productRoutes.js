@@ -24,5 +24,7 @@ router.post("/",                      ...guard, ProductController.createProduct)
 router.put("/:id",                    ...guard, ProductController.updateProduct);
 router.delete("/:id",                 ...guard, ProductController.deleteProduct);
 router.get("/:id/restock-subscribers",...guard, ProductController.getRestockSubscribers);
+router.post("/:id/variants",           ...guard, ProductController.createVariant);
+router.delete("/:id/variants/:variantId",...guard, ProductController.deleteVariant);
 
 module.exports = router;

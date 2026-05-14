@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import HomePage from "./pages/HomePage";
 import SignUpPage from "./pages/SignUpPage";
@@ -25,6 +26,9 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import OrdersPage from "./pages/OrdersPage";
 import CategoryPage from "./pages/CategoryPage";
 import TrackingPage from "./pages/TrackingPage";
+import SearchPage from "./pages/SearchPage";
+import OAuthCallbackPage from "./pages/OAuthCallbackPage";
+import PaymentResultPage from "./pages/PaymentResultPage";
 
 // Admin pages
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -45,15 +49,33 @@ const AuthRoute = ({ children }) => {
   return localStorage.getItem("token") ? children : <Navigate to="/login" replace />;
 };
 
-/** Chặn route admin khi không phải admin → redirect / */
+/** Chặn route admin — verify role từ server để tránh localStorage giả mạo */
 const AdminRoute = ({ children }) => {
-  const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/login" replace />;
-  try {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    if (user.role !== "admin") return <Navigate to="/" replace />;
-  } catch {
-    return <Navigate to="/" replace />;
+  const [status, setStatus] = React.useState("loading"); // loading | ok | denied
+
+  React.useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) { setStatus("denied"); return; }
+    import("./lib/api").then(({ default: axiosClient }) => {
+      axiosClient.get("/api/users/profile")
+        .then(({ data }) => {
+          const role = data.data?.role || data.user?.role || data.role;
+          setStatus(role === "admin" ? "ok" : "denied");
+        })
+        .catch(() => setStatus("denied"));
+    });
+  }, []);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#fafafa]">
+        <div className="w-8 h-8 border-2 border-[#0071e3] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (status === "denied") {
+    const token = localStorage.getItem("token");
+    return <Navigate to={token ? "/" : "/login"} replace />;
   }
   return children;
 };
@@ -61,6 +83,7 @@ const AdminRoute = ({ children }) => {
 function App() {
   return (
     <Router>
+      <ErrorBoundary>
       <Routes>
         {/* ── Public ── */}
         <Route path="/" element={<HomePage />} />
@@ -74,6 +97,9 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/tracking" element={<TrackingPage />} />
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
+        <Route path="/payment/result" element={<PaymentResultPage />} />
 
         {/* ── Auth required ── */}
         <Route path="/wishlist"  element={<AuthRoute><WishlistPage /></AuthRoute>} />
@@ -102,6 +128,7 @@ function App() {
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </ErrorBoundary>
 
       <ToastContainer
         position="top-right"

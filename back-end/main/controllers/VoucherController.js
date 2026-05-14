@@ -104,6 +104,11 @@ exports.updateVoucher = async (req, res, next) => {
     // Không cho sửa code sau khi tạo để tránh nhầm lẫn lịch sử sử dụng
     const { type, value, minOrderValue, maxDiscount, usageLimit, startsAt, expiresAt } = req.body;
 
+    const finalType  = type  !== undefined ? type  : voucher.type;
+    const finalValue = value !== undefined ? value : voucher.value;
+    if (finalType === "percent" && (finalValue <= 0 || finalValue > 100)) {
+      return res.status(400).json({ success: false, message: "Giá trị phần trăm phải từ 1 đến 100." });
+    }
     if (type !== undefined) voucher.type = type;
     if (value !== undefined) voucher.value = value;
     if (minOrderValue !== undefined) voucher.minOrderValue = minOrderValue;

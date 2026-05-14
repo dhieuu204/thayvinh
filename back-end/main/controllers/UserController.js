@@ -19,7 +19,6 @@ exports.getProfile = async (req, res, next) => {
   try {
     const user = await User.findOne({
       _id: req.user.id,
-      deletedAt: null,
     }).select("-password -googleId -__v");
 
     if (!user) {
@@ -139,6 +138,106 @@ exports.deleteAccount = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+// ─── Address Book ────────────────────────────────────────────────────────────
+
+// GET /api/users/addresses
+exports.getAddresses = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select("addresses");
+    return res.status(200).json({ success: true, data: user?.addresses ?? [] });
+  } catch (err) { next(err); }
+};
+
+// POST /api/users/addresses
+exports.addAddress = async (req, res, next) => {
+  try {
+    const { fullName, phone, province, district, ward, street, isDefault } = req.body;
+    if (!fullName || !phone || !province || !district || !ward || !street) {
+      return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ thông tin địa chỉ." });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+
+    // Nếu đặt làm mặc định → bỏ mặc định của các địa chỉ khác
+    if (isDefault) user.addresses.forEach((a) => { a.isDefault = false; });
+
+    // Nếu chưa có địa chỉ nào → tự động đặt làm mặc định
+    const shouldBeDefault = isDefault || user.addresses.length === 0;
+
+    user.addresses.push({ fullName: sanitize(fullName), phone: sanitize(phone), province: sanitize(province), district: sanitize(district), ward: sanitize(ward), street: sanitize(street), isDefault: shouldBeDefault });
+    await user.save();
+
+    return res.status(201).json({ success: true, message: "Đã thêm địa chỉ.", data: user.addresses });
+  } catch (err) { next(err); }
+};
+
+// PUT /api/users/addresses/:addrId
+exports.updateAddress = async (req, res, next) => {
+  try {
+    const { addrId } = req.params;
+    const { fullName, phone, province, district, ward, street, isDefault } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+
+    const addr = user.addresses.id(addrId);
+    if (!addr) return res.status(404).json({ success: false, message: "Địa chỉ không tồn tại." });
+
+    if (isDefault) user.addresses.forEach((a) => { a.isDefault = false; });
+
+    if (fullName  !== undefined) addr.fullName  = sanitize(fullName);
+    if (phone     !== undefined) addr.phone     = sanitize(phone);
+    if (province  !== undefined) addr.province  = sanitize(province);
+    if (district  !== undefined) addr.district  = sanitize(district);
+    if (ward      !== undefined) addr.ward      = sanitize(ward);
+    if (street    !== undefined) addr.street    = sanitize(street);
+    if (isDefault !== undefined) addr.isDefault = isDefault;
+
+    await user.save();
+    return res.status(200).json({ success: true, message: "Đã cập nhật địa chỉ.", data: user.addresses });
+  } catch (err) { next(err); }
+};
+
+// DELETE /api/users/addresses/:addrId
+exports.deleteAddress = async (req, res, next) => {
+  try {
+    const { addrId } = req.params;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+
+    const addr = user.addresses.id(addrId);
+    if (!addr) return res.status(404).json({ success: false, message: "Địa chỉ không tồn tại." });
+
+    const wasDefault = addr.isDefault;
+    addr.deleteOne();
+
+    // Nếu xóa địa chỉ mặc định → đặt địa chỉ đầu tiên còn lại làm mặc định
+    if (wasDefault && user.addresses.length > 0) {
+      user.addresses[0].isDefault = true;
+    }
+
+    await user.save();
+    return res.status(200).json({ success: true, message: "Đã xóa địa chỉ.", data: user.addresses });
+  } catch (err) { next(err); }
+};
+
+// PATCH /api/users/addresses/:addrId/default
+exports.setDefaultAddress = async (req, res, next) => {
+  try {
+    const { addrId } = req.params;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "Tài khoản không tồn tại." });
+
+    const addr = user.addresses.id(addrId);
+    if (!addr) return res.status(404).json({ success: false, message: "Địa chỉ không tồn tại." });
+
+    user.addresses.forEach((a) => { a.isDefault = a._id.toString() === addrId; });
+    await user.save();
+    return res.status(200).json({ success: true, message: "Đã đặt địa chỉ mặc định.", data: user.addresses });
+  } catch (err) { next(err); }
 };
 
 // ─── 6.5 Ban User (Admin only) ────────────────────────────────────────────────

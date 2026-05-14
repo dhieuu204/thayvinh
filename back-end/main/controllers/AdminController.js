@@ -8,6 +8,8 @@ const FlashSale     = require("../models/FlashSale");
 const Notification  = require("../models/Notification");
 const Setting       = require("../models/Setting");
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // THỐNG KÊ
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -208,16 +210,33 @@ exports.getOrdersByStatus = async (req, res, next) => {
 // GET /api/admin/orders?status=Pending&page=1&limit=20
 exports.getAllOrders = async (req, res, next) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 20, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const filter = {};
     if (status) filter.status = status;
 
+    // Tìm theo tên / email khách hàng
+    let userIds;
+    if (search) {
+      const matchedUsers = await User.find({
+        $or: [
+          { fullName: new RegExp(escapeRegex(search), "i") },
+          { username: new RegExp(escapeRegex(search), "i") },
+          { email: new RegExp(escapeRegex(search), "i") },
+        ],
+      }).select("_id");
+      userIds = matchedUsers.map((u) => u._id);
+      // Tìm theo mã đơn (8 ký tự cuối của _id)
+      filter.$or = [
+        { user: { $in: userIds } },
+      ];
+    }
+
     const [orders, total] = await Promise.all([
       Order.find(filter)
         .populate("user", "username email fullName")
-        .populate("products.product", "name basePrice images")
+        .populate("products.product", "name basePrice salePrice images")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -241,6 +260,23 @@ exports.getAllOrders = async (req, res, next) => {
   }
 };
 
+// ─── Get Order By Id (Admin) ──────────────────────────────────────────────────
+// GET /api/admin/orders/:orderId
+exports.getOrderById = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findById(orderId)
+      .populate("user", "username email fullName phone")
+      .populate("products.product", "name basePrice salePrice images");
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Đơn hàng không tồn tại." });
+    }
+    return res.status(200).json({ success: true, data: order });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Update Order Status ──────────────────────────────────────────────────────
 // PATCH /api/admin/orders/:orderId/status
 exports.updateOrderStatus = async (req, res, next) => {
@@ -250,6 +286,7 @@ exports.updateOrderStatus = async (req, res, next) => {
 
     // State machine — chỉ cho phép chuyển trạng thái hợp lệ
     const validTransitions = {
+      PendingPayment: ["Cancelled"],
       Pending:   ["Confirmed", "Cancelled"],
       Confirmed: ["Shipped", "Cancelled"],
       Shipped:   ["Delivered"],
@@ -279,7 +316,12 @@ exports.updateOrderStatus = async (req, res, next) => {
       }
     }
 
-    await Order.updateOne({ _id: orderId }, { status });
+    // PendingPayment + bank bị admin huỷ → khách đã chuyển tiền, cần hoàn
+    const extraUpdate = (status === "Cancelled" && order.paymentMethod === "bank" && order.status === "PendingPayment")
+      ? { refundStatus: "pending_refund" }
+      : {};
+
+    await Order.updateOne({ _id: orderId }, { status, ...extraUpdate });
 
     // Thông báo cho user về cập nhật đơn hàng
     const statusMessages = {

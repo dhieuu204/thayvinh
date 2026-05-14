@@ -75,11 +75,20 @@ function NotificationBell({ size = 13 }) {
     } catch {}
   }, []);
 
-  // Poll mỗi 60s khi đã đăng nhập
+  // Poll mỗi 60s, chỉ khi đã đăng nhập; tự dừng sau logout
   useEffect(() => {
+    if (!localStorage.getItem("token")) return;
     fetchCount();
-    const id = setInterval(fetchCount, 60_000);
-    return () => clearInterval(id);
+    const id = setInterval(() => {
+      if (!localStorage.getItem("token")) { clearInterval(id); return; }
+      fetchCount();
+    }, 60_000);
+    const stopOnLogout = () => clearInterval(id);
+    window.addEventListener("userUpdated", stopOnLogout);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("userUpdated", stopOnLogout);
+    };
   }, [fetchCount]);
 
   // Fetch danh sách khi mở dropdown
@@ -231,7 +240,7 @@ function UserCartControls({ size = 13, isLoggedIn, isAdmin, userInitial, userNam
       {/* Notification Bell — chỉ hiện khi đã đăng nhập */}
       {isLoggedIn && <NotificationBell size={size} />}
 
-      {/* Dashboard (admin) hoặc Cart (user) */}
+      {/* Dashboard (admin) hoặc Cart (user đã đăng nhập) */}
       {isAdmin ? (
         <Link
           to="/admin"
@@ -247,7 +256,7 @@ function UserCartControls({ size = 13, isLoggedIn, isAdmin, userInitial, userNam
           </svg>
           {textVisible && <span className="hidden sm:inline">Dashboard</span>}
         </Link>
-      ) : (
+      ) : isLoggedIn ? (
         <Link
           to="/cart"
           className="relative flex items-center gap-1.5 text-[#1d1d1f] hover:text-[#0071e3] transition-colors"
@@ -271,7 +280,7 @@ function UserCartControls({ size = 13, isLoggedIn, isAdmin, userInitial, userNam
           </span>
           {textVisible && <span className="hidden sm:inline">Giỏ hàng</span>}
         </Link>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -313,6 +322,10 @@ function Navbar({ scrolled, cartCount, isLoggedIn, isAdmin, userInitial }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const debounceRef = useRef(null);
+  const searchBoxRef = useRef(null);
 
   useEffect(() => {
     const close = () => setMobileOpen(false);
@@ -320,13 +333,60 @@ function Navbar({ scrolled, cartCount, isLoggedIn, isAdmin, userInitial }) {
     return () => window.removeEventListener("resize", close);
   }, []);
 
+  // Đóng dropdown khi click ngoài
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) {
+        setShowSuggest(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  // Debounce fetch gợi ý + cancel inflight request
+  const abortRef = useRef(null);
+  useEffect(() => {
+    if (!query.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (abortRef.current) abortRef.current.abort();
+      abortRef.current = new AbortController();
+      axiosClient
+        .get(`/api/products?search=${encodeURIComponent(query.trim())}&limit=6`, {
+          signal: abortRef.current.signal,
+        })
+        .then((r) => setSuggestions(r.data?.data?.products || []))
+        .catch((err) => { if (err.name !== "CanceledError") setSuggestions([]); });
+    }, 300);
+    return () => {
+      clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, [query]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (!query.trim()) return;
-    navigate(`/products?q=${encodeURIComponent(query.trim())}`);
+    navigate(`/search?q=${encodeURIComponent(query.trim())}`);
     setQuery("");
+    setShowSuggest(false);
     setMobileOpen(false);
   };
+
+  const handlePickSuggestion = (productId) => {
+    setQuery("");
+    setShowSuggest(false);
+    setMobileOpen(false);
+    navigate(`/products/${productId}`);
+  };
+
+  function formatVnd(n) {
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n || 0);
+  }
 
   return (
     <nav
@@ -385,22 +445,67 @@ function Navbar({ scrolled, cartCount, isLoggedIn, isAdmin, userInitial }) {
         {/* Right: Search + (User+Cart khi scrolled) + Mobile toggle */}
         <div className="flex items-center gap-3">
           {/* Search */}
-          <form onSubmit={handleSearch} className="relative hidden sm:block">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm kiếm..."
-              className="rounded-lg border border-[#c7c7cc] bg-white py-1.5 pl-3 pr-8 text-[13px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:border-[#0071e3]"
-              style={{ width: "160px" }}
-            />
-            <button
-              type="submit"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#0071e3] transition-colors"
-            >
-              <SearchIcon size={13} />
-            </button>
-          </form>
+          <div ref={searchBoxRef} className="relative hidden sm:block">
+            <form onSubmit={handleSearch} className="relative">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setShowSuggest(true); }}
+                onFocus={() => setShowSuggest(true)}
+                placeholder="Tìm kiếm..."
+                className="rounded-lg border border-[#c7c7cc] bg-white py-1.5 pl-3 pr-8 text-[13px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:border-[#0071e3]"
+                style={{ width: "220px" }}
+              />
+              <button
+                type="submit"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#0071e3] transition-colors"
+              >
+                <SearchIcon size={13} />
+              </button>
+            </form>
+
+            {/* Autocomplete dropdown */}
+            {showSuggest && query.trim() && (
+              <div className="absolute right-0 top-full mt-1.5 w-[320px] overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_8px_28px_rgba(0,0,0,0.12)] z-50">
+                {suggestions.length === 0 ? (
+                  <p className="px-4 py-4 text-[13px] text-[#8e8e93]">Không có gợi ý cho "{query}"</p>
+                ) : (
+                  <>
+                    {suggestions.map((p) => {
+                      const sell = Number(p.salePrice || p.basePrice || 0);
+                      const pct  = Number(p.saleDiscount || 0);
+                      const finalPrice = pct > 0 && pct < 100 ? Math.round(sell * (1 - pct / 100)) : sell;
+                      return (
+                        <button
+                          key={p._id}
+                          type="button"
+                          onClick={() => handlePickSuggestion(p._id)}
+                          className="flex w-full items-center gap-3 border-b border-black/[0.04] px-3 py-2.5 text-left transition-colors hover:bg-[#f5f5f7] last:border-b-0"
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f5f5f7]">
+                            {p.images?.[0]?.url && (
+                              <img src={p.images[0].url} alt={p.name} className="max-h-full w-auto object-contain" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate text-[13px] font-medium text-[#1d1d1f]">{p.name}</p>
+                            <p className="text-[12px] text-[#0071e3]">{formatVnd(finalPrice)}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={handleSearch}
+                      className="block w-full border-t border-black/[0.06] bg-[#fafafa] px-3 py-2.5 text-center text-[12px] font-medium text-[#0071e3] hover:bg-[#f0f7ff] transition-colors"
+                    >
+                      Xem tất cả kết quả cho "{query}" →
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* User + Cart — chỉ hiện trong Navbar khi đã scroll xuống */}
           <AnimatePresence>

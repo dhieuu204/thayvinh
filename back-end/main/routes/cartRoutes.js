@@ -8,6 +8,7 @@ router.post("/add",           authenticate, CartController.addToCart);
 router.put("/update",         authenticate, CartController.updateCart);
 router.delete("/remove",      authenticate, CartController.removeFromCart);
 router.delete("/clear",       authenticate, CartController.clearCart);
+router.post("/merge",         authenticate, CartController.mergeCart);
 router.post("/voucher",       authenticate, CartController.applyVoucher);
 router.delete("/voucher",     authenticate, CartController.removeVoucher);
 

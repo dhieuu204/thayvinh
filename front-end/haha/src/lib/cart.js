@@ -27,15 +27,15 @@ export const getCart = () => {
 };
 
 /**
- * Thêm sản phẩm vào giỏ. Nếu trùng id + variant + color thì tăng qty.
- * @param {{ id, name, image, price, variant, color, quantity }} item
+ * Thêm sản phẩm vào giỏ. Nếu trùng id + variantId + color thì tăng qty.
+ * @param {{ id, name, image, price, variantId, variant, color, quantity }} item
  */
 export const addToCart = (item) => {
   const cart = getCart();
   const idx = cart.findIndex(
     (i) =>
       i.id === item.id &&
-      i.variant === item.variant &&
+      (i.variantId ?? null) === (item.variantId ?? null) &&
       i.color === item.color
   );
   if (idx !== -1) {
@@ -45,13 +45,23 @@ export const addToCart = (item) => {
   }
   localStorage.setItem(CART_KEY, JSON.stringify(cart));
   window.dispatchEvent(new Event("cartUpdated"));
-  syncServer("/api/cart/add", "POST", { productId: item.id, quantity: item.quantity });
+  syncServer("/api/cart/add", "POST", {
+    productId: item.id,
+    variantId: item.variantId || null,
+    color: item.color || "",
+    quantity: item.quantity,
+  });
 };
 
 /**
  * Cập nhật số lượng của 1 item.
+ * @param {string} id productId
+ * @param {string} variant variant label (for localStorage dedup)
+ * @param {string} color
+ * @param {number} quantity
+ * @param {string|null} [variantId] ObjectId ref ProductVariant
  */
-export const updateQty = (id, variant, color, quantity) => {
+export const updateQty = (id, variant, color, quantity, variantId = null) => {
   const cart = getCart().map((i) =>
     i.id === id && i.variant === variant && i.color === color
       ? { ...i, quantity }
@@ -59,19 +69,23 @@ export const updateQty = (id, variant, color, quantity) => {
   );
   localStorage.setItem(CART_KEY, JSON.stringify(cart));
   window.dispatchEvent(new Event("cartUpdated"));
-  syncServer("/api/cart/update", "PUT", { productId: id, quantity });
+  syncServer("/api/cart/update", "PUT", { productId: id, variantId: variantId || null, quantity });
 };
 
 /**
  * Xoá 1 item khỏi giỏ.
+ * @param {string} id productId
+ * @param {string} variant variant label (for localStorage dedup)
+ * @param {string} color
+ * @param {string|null} [variantId] ObjectId ref ProductVariant
  */
-export const removeFromCart = (id, variant, color) => {
+export const removeFromCart = (id, variant, color, variantId = null) => {
   const cart = getCart().filter(
     (i) => !(i.id === id && i.variant === variant && i.color === color)
   );
   localStorage.setItem(CART_KEY, JSON.stringify(cart));
   window.dispatchEvent(new Event("cartUpdated"));
-  syncServer("/api/cart/remove", "DELETE", { productId: id });
+  syncServer("/api/cart/remove", "DELETE", { productId: id, variantId: variantId || null });
 };
 
 /** Xoá toàn bộ giỏ hàng */

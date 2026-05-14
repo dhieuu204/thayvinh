@@ -4,14 +4,8 @@ import { motion } from "framer-motion";
 import { ImageWithFallback } from "../ImageWithFallback";
 import { staggerContainer, staggerItem } from "../../lib/animations";
 import { fetchAPI } from "../../lib/api";
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+import { getDisplayPrice } from "../../lib/pricing";
+import { formatCurrency } from "../../lib/format";
 
 export default function NewArrival() {
   const [products, setProducts] = useState([]);
@@ -57,7 +51,7 @@ export default function NewArrival() {
         >
           {products.map((product) => {
             const image = product.images?.[0]?.url;
-            const price = product.salePrice || product.basePrice;
+            const { price } = getDisplayPrice(product);
             return (
               <motion.div
                 key={product._id}

@@ -3,14 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ImageWithFallback } from "../ImageWithFallback";
 import { fetchAPI } from "../../lib/api";
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
+import { formatCurrency } from "../../lib/format";
 
 /* ─── Countdown display ─────────────────────────────────────────── */
 function TimeUnit({ value, label }) {
@@ -89,18 +82,19 @@ function FlashSaleTitle() {
 /* ─── Product card (light) ──────────────────────────────────────── */
 function FlashCard({ product, discountType, discountValue, flashQuantity, flashSold }) {
   const image = product.images?.[0]?.url;
-  const originalPrice = product.basePrice;
-  let salePrice = product.basePrice;
+  // Flash sale áp dụng trên giá bán (salePrice), không trên giá nhập (basePrice)
+  const originalPrice = Number(product.salePrice || product.basePrice || 0);
+  let flashPrice = originalPrice;
 
   if (discountType === "percent") {
-    salePrice = Math.round(originalPrice * (1 - discountValue / 100));
+    flashPrice = Math.round(originalPrice * (1 - discountValue / 100));
   } else if (discountType === "fixed") {
-    salePrice = Math.max(0, originalPrice - discountValue);
+    flashPrice = Math.max(0, originalPrice - discountValue);
   }
 
   const discount =
-    salePrice && salePrice < originalPrice
-      ? Math.round((1 - salePrice / originalPrice) * 100)
+    flashPrice && flashPrice < originalPrice
+      ? Math.round((1 - flashPrice / originalPrice) * 100)
       : null;
   const totalFlashStock = flashQuantity || product.stock || 0;
   const soldFlash = flashSold || 0;
@@ -134,7 +128,7 @@ function FlashCard({ product, discountType, discountValue, flashQuantity, flashS
 
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           <span className="text-[14px] font-bold text-[#e53e3e]">
-            {formatCurrency(salePrice)}
+            {formatCurrency(flashPrice)}
           </span>
           {discount && (
             <span className="text-[11px] text-[#8e8e93] line-through">
@@ -192,23 +186,20 @@ export default function FlashSale() {
   useEffect(() => {
     fetchAPI("/api/products/flash-sales")
       .then((data) => {
-        console.log("[FlashSale] API Response:", data);
         if (data && data.length > 0) {
-          // Transform flash sales to flat product list with discount info
           const flatProducts = [];
-          let soonest = null;
+          const now = new Date();
 
-          let soonestStart = null;
+          // Chỉ lấy flash sale chưa hết hạn để tính countdown
+          const futureSales = data.filter((f) => new Date(f.endsAt) > now);
+          const soonest = futureSales.reduce((min, f) =>
+            !min || new Date(f.endsAt) < new Date(min) ? f.endsAt : min, null
+          );
+          const soonestStart = futureSales.reduce((min, f) =>
+            !min || new Date(f.startsAt) < new Date(min) ? f.startsAt : min, null
+          );
+
           data.forEach((flashSale) => {
-            if (new Date(flashSale.endsAt) < (soonest ? new Date(soonest) : new Date())) {
-              soonest = flashSale.endsAt;
-            } else if (!soonest) {
-              soonest = flashSale.endsAt;
-            }
-            if (!soonestStart || new Date(flashSale.startsAt) < new Date(soonestStart)) {
-              soonestStart = flashSale.startsAt;
-            }
-
             flashSale.products?.forEach((item) => {
               if (item.productId) {
                 flatProducts.push({
@@ -223,13 +214,9 @@ export default function FlashSale() {
             });
           });
 
-          console.log("[FlashSale] Transformed products:", flatProducts);
-          console.log("[FlashSale] Soonest end:", soonest);
           setProducts(flatProducts);
           if (soonest) setEndsAt(new Date(soonest));
           if (soonestStart) setStartsAt(new Date(soonestStart));
-        } else {
-          console.log("[FlashSale] No flash sales data or empty array");
         }
       })
       .catch((err) => {
