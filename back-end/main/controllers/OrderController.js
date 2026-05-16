@@ -144,7 +144,7 @@ exports.createOrder = async (req, res, next) => {
     const finalTotal = Math.max(0, total - discountAmount);
 
     const fee = typeof shippingFee === "number" && shippingFee >= 0 ? shippingFee : 0;
-    const initialStatus = ["bank", "vnpay"].includes(paymentMethod) ? "PendingPayment" : "Pending";
+    const initialStatus = ["bank", "vnpay", "momo"].includes(paymentMethod) ? "PendingPayment" : "Pending";
 
     const order = await Order.create({
       user: userId,

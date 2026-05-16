@@ -554,11 +554,15 @@ export default function CheckoutPage() {
       if (paymentMethod === "bank") {
         setBankOrder(res.data);
       } else if (paymentMethod === "vnpay") {
-        // Lấy URL thanh toán VNPay rồi redirect
         const { data: vnpRes } = await axiosClient.post("/api/payments/vnpay/create", {
           orderId: res.data._id,
         });
         window.location.href = vnpRes.data.paymentUrl;
+      } else if (paymentMethod === "momo") {
+        const { data: momoRes } = await axiosClient.post("/api/payments/momo/create", {
+          orderId: res.data._id,
+        });
+        window.location.href = momoRes.data.paymentUrl;
       } else {
         toast.success("Đặt hàng thành công! Cảm ơn bạn đã mua hàng.");
         navigate("/orders");
