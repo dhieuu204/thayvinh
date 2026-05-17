@@ -23,6 +23,7 @@ const orderSchema = new mongoose.Schema(
         },
         quantity:         { type: Number, required: true, min: 1 },
         priceAtOrder:     { type: Number, required: true, min: 0 },
+        costAtOrder:      { type: Number, default: null, min: 0 },
         nameAtOrder:      { type: String, default: "" },
         imageAtOrder:     { type: String, default: "" },
         variantLabel:     { type: String, default: "" },

@@ -646,8 +646,11 @@ async function crawlProduct(item, categoryConfig) {
   // saleDiscount sẽ tự áp lúc hiển thị/order. Nếu không có giảm → current = list.
   const listPrice = detail.priceInfo.old || detail.priceInfo.current || item.listOldPrice || item.listPrice || 0;
   const salePrice = listPrice;
-  const basePrice = salePrice
-    ? roundToThousand(salePrice * CONFIG.costRatio)
+  // basePrice (giá nhập) tính trên giá THỰC tế khách trả (sau saleDiscount),
+  // tránh trường hợp bán lỗ khi TopZone giảm nhiều hơn costRatio.
+  const actualPrice = detail.priceInfo.current || item.listPrice || listPrice;
+  const basePrice = actualPrice
+    ? roundToThousand(actualPrice * CONFIG.costRatio)
     : 0;
   const productName =
     cleanProductBaseName(item.baseName || detail.title || item.name) || item.name;

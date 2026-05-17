@@ -1,7 +1,7 @@
 const express          = require("express");
 const router           = express.Router();
 const AdminController      = require("../controllers/AdminController");
-const CategoryController   = require("../controllers/categoryController");
+const CategoryController   = require("../controllers/CategoryController");
 const { authenticate, authorizeAdmin } = require("../middleware/authMiddleware");
 
 const guard = [authenticate, authorizeAdmin];
@@ -9,6 +9,7 @@ const guard = [authenticate, authorizeAdmin];
 // ── Thống kê ──────────────────────────────────────────────────────────────────
 router.get("/stats/overview",         ...guard, AdminController.getOverview);
 router.get("/stats/revenue",          ...guard, AdminController.getRevenueStats);
+router.get("/stats/by-category",      ...guard, AdminController.getStatsByCategory);
 router.get("/stats/top-products",     ...guard, AdminController.getTopProducts);
 router.get("/stats/top-customers",    ...guard, AdminController.getTopCustomers);
 router.get("/stats/categories",       ...guard, AdminController.getCategoryStats);

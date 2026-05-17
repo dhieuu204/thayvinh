@@ -98,6 +98,7 @@ exports.createOrder = async (req, res, next) => {
         product:      item.product,
         quantity:     item.quantity,
         priceAtOrder: price,
+        costAtOrder:  product.basePrice || 0,
         nameAtOrder:  product.name || "",
         imageAtOrder: product.images?.[0]?.url || "",
         variantLabel,

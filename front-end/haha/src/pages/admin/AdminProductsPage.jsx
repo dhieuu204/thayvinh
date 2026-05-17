@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "react-toastify";
 import axiosClient from "../../lib/api";
 import { ImageWithFallback } from "../../components/ImageWithFallback";
 import { getDisplayPrice } from "../../lib/pricing";
+import { SearchIcon } from "../../components/icons";
 
 function fmt(n) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n);
@@ -567,18 +568,42 @@ export default function AdminProductsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // null | "add" | product object
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const debounceRef = useRef(null);
+  const abortRef = useRef(null);
 
   const load = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
     setLoading(true);
-    axiosClient.get(`/api/products?page=${page}&limit=15`)
+    const params = new URLSearchParams({ page, limit: 15 });
+    if (search.trim()) params.set("search", search.trim());
+    axiosClient.get(`/api/products?${params}`, { signal: abortRef.current.signal })
       .then((res) => {
         setProducts(res.data.data?.products || []);
         setTotalPages(res.data.data?.pagination?.totalPages || 1);
         setTotal(res.data.data?.pagination?.total || 0);
       })
-      .catch(() => toast.error("Không tải được sản phẩm"))
+      .catch((err) => { if (err.name !== "CanceledError") toast.error("Không tải được sản phẩm"); })
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [page, search]);
+
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchInput(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPage(1);
+      setSearch(val);
+    }, 300);
+  };
+
+  const handleSearchClear = () => {
+    setSearchInput("");
+    setSearch("");
+    setPage(1);
+  };
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -625,16 +650,43 @@ export default function AdminProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-semibold text-[#1d1d1f]">Quản lý sản phẩm</h1>
-          <p className="text-sm text-[#8e8e93]">{total} sản phẩm</p>
+          <p className="text-sm text-[#8e8e93]">
+            {search.trim() ? `${total} kết quả cho "${search}"` : `${total} sản phẩm`}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModal("add")}
-          className="flex items-center gap-2 rounded-full bg-[#1d1d1f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#3d3d3f] transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Thêm sản phẩm
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Search — cùng style với header */}
+          <div className="relative">
+            <input
+              type="text"
+              value={searchInput}
+              onChange={handleSearchChange}
+              placeholder="Tìm kiếm sản phẩm..."
+              className="rounded-lg border border-[#c7c7cc] bg-white py-2 pl-3 pr-8 text-[13px] text-[#1d1d1f] placeholder-[#8e8e93] outline-none transition-all focus:border-[#0071e3] w-[220px]"
+            />
+            {searchInput ? (
+              <button
+                type="button"
+                onClick={handleSearchClear}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8e8e93] hover:text-[#1d1d1f] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            ) : (
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8e8e93] pointer-events-none">
+                <SearchIcon size={13} />
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setModal("add")}
+            className="flex items-center gap-2 rounded-full bg-[#1d1d1f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#3d3d3f] transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Thêm sản phẩm
+          </button>
+        </div>
       </div>
 
       {/* Table */}

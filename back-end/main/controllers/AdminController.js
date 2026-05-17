@@ -18,21 +18,44 @@ const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // GET /api/admin/stats/overview
 exports.getOverview = async (req, res, next) => {
   try {
-    const [userCount, productCount, orderCount, revenueResult] = await Promise.all([
+    const DONE = ["Confirmed", "Shipped", "Delivered"];
+    const [userCount, productCount, orderCount, profitResult] = await Promise.all([
       User.countDocuments({ deletedAt: null }),
       Product.countDocuments({ isActive: true, deletedAt: null }),
       Order.countDocuments(),
       Order.aggregate([
-        { $match: { status: { $in: ["Confirmed", "Shipped", "Delivered"] } } },
-        { $group: { _id: null, total: { $sum: "$total" } } },
+        { $match: { status: { $in: DONE } } },
+        // Lưu order.total (đã gồm ship, đã trừ voucher) trước khi unwind
+        { $addFields: { _orderTotal: "$total" } },
+        { $unwind: "$products" },
+        { $lookup: { from: "products", localField: "products.product", foreignField: "_id", as: "_prod" } },
+        { $addFields: {
+          _cost: { $ifNull: [
+            "$products.costAtOrder",
+            { $ifNull: [{ $arrayElemAt: ["$_prod.basePrice", 0] }, "$products.priceAtOrder"] }
+          ]},
+        }},
+        // Gom về đơn hàng để tránh đếm trùng revenue sau unwind
+        { $group: {
+          _id: "$_id",
+          totalOrder: { $first: "$_orderTotal" },
+          cost:       { $sum: { $multiply: ["$_cost", "$products.quantity"] } },
+        }},
+        { $group: {
+          _id: null,
+          totalRevenue: { $sum: "$totalOrder" },
+          totalCost:    { $sum: "$cost" },
+        }},
+        { $addFields: { totalProfit: { $subtract: ["$totalRevenue", "$totalCost"] } } },
       ]),
     ]);
 
-    const totalRevenue = revenueResult[0]?.total || 0;
+    const totalRevenue = profitResult[0]?.totalRevenue || 0;
+    const totalProfit  = profitResult[0]?.totalProfit  || 0;
 
     return res.status(200).json({
       success: true,
-      data: { userCount, productCount, orderCount, totalRevenue },
+      data: { userCount, productCount, orderCount, totalRevenue, totalProfit },
     });
   } catch (err) {
     next(err);
@@ -59,8 +82,80 @@ exports.getRevenueStats = async (req, res, next) => {
           },
         },
       },
-      { $group: { _id: groupBy, revenue: { $sum: "$total" }, orderCount: { $sum: 1 } } },
+      { $addFields: { _orderTotal: "$total", _groupKey: groupBy } },
+      { $unwind: "$products" },
+      { $lookup: { from: "products", localField: "products.product", foreignField: "_id", as: "_prod" } },
+      { $addFields: {
+        _cost: { $ifNull: [
+          "$products.costAtOrder",
+          { $ifNull: [{ $arrayElemAt: ["$_prod.basePrice", 0] }, "$products.priceAtOrder"] }
+        ]},
+      }},
+      // Gom về đơn hàng để tránh đếm revenue trùng, orderCount đúng
+      { $group: {
+        _id: { orderId: "$_id", groupKey: "$_groupKey" },
+        revenue: { $first: "$_orderTotal" },
+        cost:    { $sum: { $multiply: ["$_cost", "$products.quantity"] } },
+      }},
+      { $group: {
+        _id: "$_id.groupKey",
+        revenue:    { $sum: "$revenue" },
+        cost:       { $sum: "$cost" },
+        orderCount: { $sum: 1 },
+      }},
+      { $addFields: { profit: { $subtract: ["$revenue", "$cost"] } } },
       { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
+    ]);
+
+    return res.status(200).json({ success: true, data: stats });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Get Stats By Category ───────────────────────────────────────────────────
+// GET /api/admin/stats/by-category
+exports.getStatsByCategory = async (req, res, next) => {
+  try {
+    const DONE = ["Confirmed", "Shipped", "Delivered"];
+    const stats = await Order.aggregate([
+      { $match: { status: { $in: DONE } } },
+      { $addFields: { _orderTotal: "$total" } },
+      { $unwind: "$products" },
+      { $lookup: { from: "products", localField: "products.product", foreignField: "_id", as: "_prod" } },
+      { $unwind: { path: "$_prod", preserveNullAndEmptyArrays: true } },
+      { $lookup: { from: "categories", localField: "_prod.category", foreignField: "_id", as: "_cat" } },
+      { $addFields: {
+        _cost: { $ifNull: [
+          "$products.costAtOrder",
+          { $ifNull: ["$_prod.basePrice", "$products.priceAtOrder"] }
+        ]},
+        _categoryName: { $ifNull: [{ $arrayElemAt: ["$_cat.name", 0] }, "Khác"] },
+        _categoryId:   { $ifNull: ["$_prod.category", "unknown"] },
+      }},
+      { $group: {
+        _id: { orderId: "$_id", categoryId: "$_categoryId", categoryName: "$_categoryName" },
+        revenue:  { $first: "$_orderTotal" },
+        itemRevenue: { $sum: { $multiply: ["$products.priceAtOrder", "$products.quantity"] } },
+        cost:     { $sum: { $multiply: ["$_cost", "$products.quantity"] } },
+        quantity: { $sum: "$products.quantity" },
+      }},
+      { $group: {
+        _id: { categoryId: "$_id.categoryId", categoryName: "$_id.categoryName" },
+        revenue:  { $sum: "$itemRevenue" },
+        cost:     { $sum: "$cost" },
+        quantity: { $sum: "$quantity" },
+      }},
+      { $addFields: { profit: { $subtract: ["$revenue", "$cost"] } } },
+      { $project: {
+        _id: 0,
+        categoryId:   "$_id.categoryId",
+        categoryName: "$_id.categoryName",
+        revenue:  1,
+        profit:   1,
+        quantity: 1,
+      }},
+      { $sort: { revenue: -1 } },
     ]);
 
     return res.status(200).json({ success: true, data: stats });
