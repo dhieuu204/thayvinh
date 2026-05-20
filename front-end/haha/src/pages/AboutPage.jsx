@@ -169,13 +169,13 @@ export default function AboutPage() {
               </h2>
               <div className="mt-5 space-y-4 text-[15px] leading-relaxed text-[#3a3a3c]">
                 <p>
-                  ShopZone ra đời từ một nhóm những người trẻ yêu công nghệ, với niềm tin rằng mọi người Việt đều xứng đáng được trải nghiệm sản phẩm Apple chính hãng với chi phí hợp lý.
+                  HK Tech ra đời từ một nhóm những người trẻ yêu công nghệ, với niềm tin rằng mọi người Việt đều xứng đáng được trải nghiệm sản phẩm Apple chính hãng với chi phí hợp lý.
                 </p>
                 <p>
                   Chúng tôi bắt đầu từ một cửa hàng nhỏ tại TP.HCM năm 2016. Với cam kết không bán hàng xách tay, không lừa dối khách hàng — chúng tôi đã dần xây dựng được niềm tin và mở rộng ra toàn quốc.
                 </p>
                 <p>
-                  Hôm nay, hơn 50.000 khách hàng tin tưởng ShopZone là điểm đến đầu tiên khi cần mua thiết bị Apple.
+                  Hôm nay, hơn 50.000 khách hàng tin tưởng HK Tech là điểm đến đầu tiên khi cần mua thiết bị Apple.
                 </p>
               </div>
             </motion.div>
@@ -220,7 +220,7 @@ export default function AboutPage() {
               Tại sao chọn chúng tôi
             </span>
             <h2 className="mt-3 text-[28px] font-bold text-[#1d1d1f]">
-              Cam kết của ShopZone
+              Cam kết của HK Tech
             </h2>
           </motion.div>
 
@@ -255,7 +255,7 @@ export default function AboutPage() {
             className="mb-10 text-center"
           >
             <span className="text-xs font-semibold uppercase tracking-widest text-[#0071e3]">Đội ngũ</span>
-            <h2 className="mt-3 text-[28px] font-bold text-[#1d1d1f]">Con người tạo nên ShopZone</h2>
+            <h2 className="mt-3 text-[28px] font-bold text-[#1d1d1f]">Con người tạo nên HK Tech</h2>
           </motion.div>
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

@@ -1,3 +1,4 @@
+const mongoose           = require("mongoose");
 const Product            = require("../models/Product");
 const Category           = require("../models/Category");
 const ProductVariant     = require("../models/ProductVariant");
@@ -164,6 +165,9 @@ exports.filterByCategory = async (req, res, next) => {
 
     let category;
     if (categoryId) {
+      if (!mongoose.isValidObjectId(categoryId)) {
+        return res.status(400).json({ success: false, message: "categoryId không hợp lệ." });
+      }
       category = await Category.findById(categoryId);
     } else if (categorySlug) {
       category = await Category.findOne({ slug: categorySlug });

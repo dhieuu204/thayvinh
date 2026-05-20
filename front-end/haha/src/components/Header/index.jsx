@@ -404,7 +404,7 @@ function Navbar({ scrolled, cartCount, isLoggedIn, isAdmin, userInitial }) {
         <Link
           to="/"
           className="text-[#1d1d1f] flex-shrink-0 transition-opacity hover:opacity-75"
-          aria-label="ShopZone - Trang chủ"
+          aria-label="HK Tech - Trang chủ"
         >
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <AppleLogo size={30} />

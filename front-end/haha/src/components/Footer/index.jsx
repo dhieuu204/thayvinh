@@ -6,7 +6,7 @@ export default function Footer() {
           {/* Cột 1: Logo + mô tả + hotline */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-white font-bold text-lg tracking-wide">SHOPZONE</span>
+              <span className="text-white font-bold text-lg tracking-wide">HK TECH</span>
               <div className="w-px h-8 bg-white/30" />
               <div className="text-center leading-tight">
                 <div className="flex items-center gap-1">
@@ -19,7 +19,7 @@ export default function Footer() {
               </div>
             </div>
             <p className="text-white/60 mb-5 leading-relaxed" style={{ fontSize: "12px" }}>
-              Năm 2026, ShopZone trở thành đại lý ủy quyền của Apple. Chúng tôi phát triển chuỗi cửa hàng tiêu chuẩn và Apple Mono Store nhằm mang đến trải nghiệm tốt nhất về sản phẩm và dịch vụ của Apple cho người dùng Việt Nam.
+              Năm 2026, HK Tech trở thành đại lý ủy quyền của Apple. Chúng tôi phát triển chuỗi cửa hàng tiêu chuẩn và Apple Mono Store nhằm mang đến trải nghiệm tốt nhất về sản phẩm và dịch vụ của Apple cho người dùng Việt Nam.
             </p>
             <div className="space-y-2.5">
               {[
@@ -131,7 +131,7 @@ export default function Footer() {
 
         <div className="border-t border-white/10 pt-4 flex flex-col md:flex-row items-center justify-between gap-3">
           <p className="text-white/40" style={{ fontSize: "11px" }}>
-            © 2024 ShopZone. Tất cả quyền lợi được bảo lưu.
+            © 2024 HK Tech. Tất cả quyền lợi được bảo lưu.
           </p>
           <div className="flex items-center gap-4">
             <a href="#" className="text-white/40 hover:text-white transition-colors">

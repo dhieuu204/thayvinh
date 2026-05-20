@@ -9,6 +9,7 @@ const LoyaltyTransaction = require("../models/LoyaltyTransaction");
 const VoucherUsage       = require("../models/VoucherUsage");
 const ReturnRequest      = require("../models/ReturnRequest");
 const Notification       = require("../models/Notification");
+const ShippingZone       = require("../models/ShippingZone");
 const { getEffectivePrice } = require("../lib/pricing");
 // const transporter = require("../config/mailer"); // TODO: khi có mailer config
 
@@ -116,7 +117,6 @@ exports.createOrder = async (req, res, next) => {
     let appliedVoucher = null;
     if (voucherCode) {
       const now = new Date();
-      const alreadyUsed = await VoucherUsage.findOne({ userId });
 
       // Atomic: tìm và increment trong 1 query, rollback nếu không tìm thấy
       appliedVoucher = await Voucher.findOneAndUpdate(
@@ -132,19 +132,40 @@ exports.createOrder = async (req, res, next) => {
         { new: true }
       );
 
-      if (appliedVoucher && !alreadyUsed) {
-        discountAmount = appliedVoucher.type === "percent"
-          ? Math.min(total * appliedVoucher.value / 100, appliedVoucher.maxDiscount ?? Infinity)
-          : appliedVoucher.value;
-      } else if (appliedVoucher && alreadyUsed) {
-        // Đã dùng → rollback increment
-        await Voucher.updateOne({ _id: appliedVoucher._id }, { $inc: { usedCount: -1 } });
-        appliedVoucher = null;
+      if (appliedVoucher) {
+        // Check user đã dùng CHÍNH voucher này chưa (theo voucherId + userId)
+        const alreadyUsed = await VoucherUsage.findOne({ voucherId: appliedVoucher._id, userId });
+
+        if (!alreadyUsed) {
+          discountAmount = appliedVoucher.type === "percent"
+            ? Math.min(total * appliedVoucher.value / 100, appliedVoucher.maxDiscount ?? Infinity)
+            : appliedVoucher.value;
+        } else {
+          // Đã dùng → rollback increment
+          await Voucher.updateOne({ _id: appliedVoucher._id }, { $inc: { usedCount: -1 } });
+          appliedVoucher = null;
+        }
       }
     }
     const finalTotal = Math.max(0, total - discountAmount);
 
-    const fee = typeof shippingFee === "number" && shippingFee >= 0 ? shippingFee : 0;
+    // Tính shippingFee server-side từ ShippingZone (không tin shippingFee từ client)
+    // Quy tắc: subtotal >= 500k → free; else lookup zone theo billingInfo.city; fallback 30k
+    const FREE_SHIP_THRESHOLD = 500_000;
+    const DEFAULT_SHIP_FEE = 30_000;
+    let fee = 0;
+    if (total < FREE_SHIP_THRESHOLD) {
+      const cityName = billingInfo?.city?.trim();
+      if (cityName) {
+        const zone = await ShippingZone.findOne({
+          name: { $regex: `^${cityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+          isActive: true,
+        }).lean();
+        fee = zone?.fee ?? DEFAULT_SHIP_FEE;
+      } else {
+        fee = DEFAULT_SHIP_FEE;
+      }
+    }
     const initialStatus = ["bank", "vnpay", "momo"].includes(paymentMethod) ? "PendingPayment" : "Pending";
 
     const order = await Order.create({

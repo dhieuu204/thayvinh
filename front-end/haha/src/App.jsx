@@ -4,10 +4,12 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ChatWidget from "./components/ChatWidget";
 
 import HomePage from "./pages/HomePage";
 import SignUpPage from "./pages/SignUpPage";
@@ -80,6 +82,12 @@ const AdminRoute = ({ children }) => {
   return children;
 };
 
+function ChatWidgetGate() {
+  const location = useLocation();
+  if (location.pathname.startsWith("/admin")) return null;
+  return <ChatWidget />;
+}
+
 function App() {
   return (
     <Router>
@@ -129,6 +137,8 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
+
+      <ChatWidgetGate />
 
       <ToastContainer
         position="top-right"

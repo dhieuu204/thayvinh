@@ -76,7 +76,13 @@ exports.updateProfile = async (req, res, next) => {
     if (fullName !== undefined) updateData.fullName = sanitize(fullName);
     if (phone    !== undefined) updateData.phone    = sanitize(phone);
     if (address  !== undefined) updateData.address  = sanitize(address);
-    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+    if (avatarUrl !== undefined) {
+      // Chỉ chấp nhận URL http/https, chặn javascript:, data:, vbscript:...
+      if (avatarUrl !== "" && !/^https?:\/\//i.test(avatarUrl)) {
+        return res.status(400).json({ success: false, message: "avatarUrl phải là URL http(s)." });
+      }
+      updateData.avatarUrl = avatarUrl;
+    }
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ success: false, message: "Không có dữ liệu để cập nhật." });

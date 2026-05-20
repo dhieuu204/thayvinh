@@ -16,6 +16,6 @@ router.patch("/:orderId/cancel",          authenticate, OrderController.cancelOr
 router.post("/:orderId/return",           authenticate, OrderController.createReturnRequest);
 router.patch("/:orderId/confirm-payment", authenticate, authorizeAdmin, OrderController.confirmPayment);
 router.patch("/:orderId/mark-refunded",   authenticate, authorizeAdmin, OrderController.markRefunded);
-router.delete("/:orderId",               authenticate, OrderController.deleteOrder);
+router.delete("/:orderId",                authenticate, authorizeAdmin, OrderController.deleteOrder);
 
 module.exports = router;

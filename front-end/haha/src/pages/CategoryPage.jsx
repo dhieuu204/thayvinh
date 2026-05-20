@@ -28,8 +28,6 @@ const CATEGORY_META = {
 const SORT_OPTIONS = [
   { value: "newest",      label: "Mới" },
   { value: "best_seller", label: "Bán chạy" },
-  { value: "featured",    label: "Nổi bật" },
-  { value: "discount",    label: "Giảm giá" },
   { value: "price_asc",   label: "Giá thấp đến cao" },
   { value: "price_desc",  label: "Giá cao đến thấp" },
 ];

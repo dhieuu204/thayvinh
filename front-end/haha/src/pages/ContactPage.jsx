@@ -40,7 +40,7 @@ const CONTACT_INFO = [
       </svg>
     ),
     label: "Email",
-    value: "support@shopzone.vn",
+    value: "support@hktech.vn",
     sub: "Phản hồi trong 2 giờ làm việc",
   },
   {
@@ -139,7 +139,7 @@ export default function ContactPage() {
                 Liên hệ với chúng tôi
               </h1>
               <p className="mt-2 max-w-lg text-[15px] text-[#6e6e73]">
-                Đội ngũ hỗ trợ của ShopZone luôn sẵn sàng tư vấn và giải đáp mọi thắc mắc của bạn.
+                Đội ngũ hỗ trợ của HK Tech luôn sẵn sàng tư vấn và giải đáp mọi thắc mắc của bạn.
               </p>
             </motion.div>
           </div>

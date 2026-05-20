@@ -20,7 +20,7 @@ export default function NewArrival() {
 
   return (
     <section className="w-full bg-[#fafafa] py-8 pt-10">
-      <div className="max-w-[1200px] mx-auto px-8 flex flex-col items-center gap-4">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-8 flex flex-col items-center gap-4">
         <motion.div
           className="text-center"
           initial={{ opacity: 0, y: 20 }}
@@ -43,7 +43,7 @@ export default function NewArrival() {
         </motion.div>
 
         <motion.div
-          className="w-full grid grid-cols-3 gap-5 pt-5"
+          className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pt-5"
           variants={staggerContainer}
           initial="initial"
           whileInView="whileInView"

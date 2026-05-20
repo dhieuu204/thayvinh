@@ -28,11 +28,21 @@ const shippingRoutes     = require("./routes/shippingRoutes");
 const imageRoutes        = require("./routes/imageRoutes");
 const bannerRoutes       = require("./routes/bannerRoutes");
 const settingsRoutes     = require("./routes/settingsRoutes");
+const chatRoutes         = require("./routes/chatRoutes");
 
 const cookieParser = require("cookie-parser");
 const rateLimit    = require("express-rate-limit");
+const helmet      = require("helmet");
 const passport = require("./config/passport");
 const app = express();
+
+// ── Security headers ───────────────────────────────────────────────────────────
+// Tắt CSP mặc định vì API trả JSON, không render HTML (FE riêng do nginx serve).
+// Frontend riêng có thể cấu hình CSP qua nginx headers.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // cho phép FE khác origin load ảnh /api/images/...
+}));
 
 const ALLOWED_ORIGINS = process.env.NODE_ENV === "production"
   ? [process.env.CLIENT_URL].filter(Boolean)
@@ -71,9 +81,22 @@ const searchLimit = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "Quá nhiều yêu cầu tìm kiếm." },
 });
+const chatLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 phút
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Bạn đang chat quá nhanh. Thử lại sau ít phút." },
+});
 
 // Kết nối MongoDB
 connectDB();
+
+// ── No-store cho API nhạy cảm (route handler có thể override bằng res.set) ─────
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  next();
+});
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use("/api/auth/login",          authLimit);
@@ -81,6 +104,7 @@ app.use("/api/auth/register",       authLimit);
 app.use("/api/auth/forgot-password",authLimit);
 app.use("/api/auth/verify-otp",     authLimit);
 app.use("/api/auth/verify-register-otp", authLimit);
+app.use("/api/auth/reset-password", authLimit);
 app.use("/api/products/search",     searchLimit);
 app.use("/api/auth",          authRoutes);
 app.use("/api/users",         userRoutes);
@@ -98,6 +122,7 @@ app.use("/api/shipping",      shippingRoutes);
 app.use("/api/images",        imageRoutes);
 app.use("/api/banners",       bannerRoutes);
 app.use("/api/settings",      settingsRoutes);
+app.use("/api/chat",          chatLimit, chatRoutes);
 
 // ── Global error handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
