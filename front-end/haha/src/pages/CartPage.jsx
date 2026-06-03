@@ -245,14 +245,17 @@ function normalizeServerCart(products) {
   return products.map((p) => {
     const prod = p.productId || {};
     const { price } = getDisplayPrice(prod);
+    const variantLabel = typeof p.variantId === "object" && p.variantId !== null
+      ? (p.variantId.name || p.variantId.sku || null)
+      : null;
     return {
-      id: prod._id || p.productId,
+      id: prod._id || (typeof p.productId === "string" ? p.productId : p.productId?._id) || "",
       name: prod.name || "Sản phẩm",
       image: prod.images?.[0]?.url,
       price: price || 0,
       quantity: p.quantity,
-      variant: null,
-      color: null,
+      variant: variantLabel,
+      color: typeof p.color === "string" ? p.color : null,
     };
   });
 }

@@ -92,18 +92,24 @@ export default function ProductDetailPage() {
     const ctrl = new AbortController();
     const signal = ctrl.signal;
     setLoading(true);
-    Promise.all([
-      fetch(`${API_URL}/api/products/${id}`, { signal }).then((r) => r.json()),
-      fetch(`${API_URL}/api/products/${id}/related`, { signal }).then((r) => r.json()),
-      fetch(`${API_URL}/api/reviews/product/${id}`, { signal }).then((r) => r.json()),
-      fetch(`${API_URL}/api/products/${id}/variants`, { signal }).then((r) => r.json()),
-    ])
-      .then(([prodJson, relJson, revJson, varJson]) => {
+    // Fetch product trước (id có thể là _id hoặc slug), rồi dùng _id thật cho các API phụ
+    fetch(`${API_URL}/api/products/${id}`, { signal })
+      .then((r) => r.json())
+      .then((prodJson) => {
         const p = prodJson.data;
+        if (!p?._id) throw new Error("not found");
         setProduct(p);
         setSelectedVariant(null);
         setSelectedAttrs({});
-        setWishlisted(isInWishlist(p?._id));
+        setWishlisted(isInWishlist(p._id));
+        const pid = p._id;
+        return Promise.all([
+          fetch(`${API_URL}/api/products/${pid}/related`, { signal }).then((r) => r.json()),
+          fetch(`${API_URL}/api/reviews/product/${pid}`, { signal }).then((r) => r.json()),
+          fetch(`${API_URL}/api/products/${pid}/variants`, { signal }).then((r) => r.json()),
+        ]);
+      })
+      .then(([relJson, revJson, varJson]) => {
         setSimilar(relJson.data || []);
         setReviews(revJson.data?.reviews || []);
         setAvgRating(revJson.data?.avgRating || 0);

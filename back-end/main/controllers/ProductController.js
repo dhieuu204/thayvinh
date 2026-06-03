@@ -78,11 +78,15 @@ exports.getAll = async (req, res, next) => {
 // Public — kiểm tra flash sale còn hiệu lực không
 exports.getById = async (req, res, next) => {
   try {
-    const product = await Product.findOne({
-      _id: req.params.id,
+    // Chấp nhận cả ObjectId (link nội bộ) lẫn slug (link từ chatbot, SEO)
+    const { id } = req.params;
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+    const query = {
       isActive: true,
       deletedAt: null,
-    })
+      ...(isObjectId ? { _id: id } : { slug: id }),
+    };
+    const product = await Product.findOne(query)
       .select("-__v")
       .populate("category", "name slug");
 

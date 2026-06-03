@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { Bot, X, Send } from "lucide-react";
 import { sendChatMessage, loadHistory, saveHistory } from "../../lib/chatApi";
 
@@ -15,17 +14,15 @@ const QUICK_REPLIES = [
 ];
 
 function renderContent(text) {
-  const parts = text.split(/(\/(?:products|categories)\/[a-z0-9-]+)/gi);
+  // Render **bold** của Markdown thành chữ in đậm
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
-    if (/^\/(products|categories)\/[a-z0-9-]+$/i.test(part)) {
+    const boldMatch = /^\*\*([^*]+)\*\*$/.exec(part);
+    if (boldMatch) {
       return (
-        <Link
-          key={i}
-          to={part}
-          className="text-[#0071e3] underline underline-offset-2 hover:opacity-80"
-        >
-          {part}
-        </Link>
+        <strong key={i} className="font-semibold text-[#1d1d1f]">
+          {boldMatch[1]}
+        </strong>
       );
     }
     return <span key={i}>{part}</span>;
@@ -98,14 +95,11 @@ export default function ChatWidget() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Mở chat tư vấn"
-          className="group fixed bottom-6 right-6 z-[9999] w-15 h-15 rounded-full bg-[#0071e3] text-white shadow-[0_8px_24px_rgba(0,113,227,0.4)] flex items-center justify-center hover:bg-[#0077ed] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          className="group fixed bottom-6 right-6 z-[9999] bg-transparent border-none p-0 hover:scale-110 active:scale-95 transition-all cursor-pointer drop-shadow-lg"
           style={{ width: 60, height: 60 }}
         >
-          {/* Subtle pulse ring */}
-          <span className="absolute inset-0 rounded-full bg-[#0071e3] opacity-30 animate-ping" />
-
           {/* Bot icon */}
-          <Bot size={28} className="relative z-10" strokeWidth={2} />
+          <img src="https://slink.ptit.edu.vn/images/chatbot.png" alt="chatbot" className="w-full h-full object-contain" />
 
           {/* Online dot */}
           <span className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full bg-[#34c759] border-2 border-white z-10" />
@@ -118,8 +112,8 @@ export default function ChatWidget() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-[#1d1d1f] text-white">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#0071e3] flex items-center justify-center">
-                <Bot size={18} strokeWidth={2.2} />
+              <div className="w-9 h-9 rounded-full overflow-hidden">
+                <img src="https://slink.ptit.edu.vn/images/chatbot.png" alt="chatbot" className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="text-sm font-semibold">HK Tech Assistant</div>

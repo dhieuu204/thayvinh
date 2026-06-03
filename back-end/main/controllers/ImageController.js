@@ -12,13 +12,12 @@ exports.upload = async (req, res, next) => {
       contentType: req.file.mimetype,
     });
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-
+    // URL relative — browser sẽ resolve theo origin hiện tại (local hay production)
     return res.status(201).json({
       success: true,
       data: {
         id: image._id,
-        url: `${baseUrl}/api/images/${image._id}`,
+        url: `/api/images/${image._id}`,
       },
     });
   } catch (err) {

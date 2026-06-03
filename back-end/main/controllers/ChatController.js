@@ -14,6 +14,16 @@ const STOPWORDS = new Set([
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Mapping từ khóa ngữ nghĩa → keyword tìm kiếm sản phẩm
+const INTENT_KEYWORDS = [
+  { match: /iphone|ip\d|điện thoại|phone/i,   search: "iPhone" },
+  { match: /macbook|mac\s*book|laptop/i,        search: "MacBook" },
+  { match: /ipad|máy tính bảng|tablet/i,        search: "iPad" },
+  { match: /airpods|tai nghe|headphone/i,        search: "AirPods" },
+  { match: /apple watch|đồng hồ|watch/i,         search: "Apple Watch" },
+  { match: /mac mini|mac pro|imac/i,             search: "Mac" },
+];
+
 async function findRelatedProducts(query) {
   if (!query || query.length < 2) return [];
 
@@ -23,43 +33,67 @@ async function findRelatedProducts(query) {
     .filter((w) => w.length >= 2 && !STOPWORDS.has(w))
     .slice(0, 8);
 
-  if (tokens.length === 0) return [];
+  // 1) Ưu tiên text search (dùng index trên Product.name)
+  if (tokens.length > 0) {
+    try {
+      const textResults = await Product.find(
+        {
+          $text: { $search: tokens.join(" ") },
+          isActive: true,
+          deletedAt: null,
+        },
+        { score: { $meta: "textScore" } }
+      )
+        .select("name slug basePrice salePrice")
+        .sort({ score: { $meta: "textScore" } })
+        .limit(8)
+        .lean();
 
-  // 1) Ưu tiên text search (dùng index trên Product.name, có ranking theo độ liên quan)
-  try {
-    const textResults = await Product.find(
-      {
-        $text: { $search: tokens.join(" ") },
+      if (textResults.length > 0) return textResults;
+    } catch (err) {
+      /* fall through */
+    }
+
+    // 2) Fallback regex trên name
+    try {
+      const regex = new RegExp(tokens.map(escapeRegex).join("|"), "i");
+      const regexResults = await Product.find({
+        name: regex,
         isActive: true,
         deletedAt: null,
-      },
-      { score: { $meta: "textScore" } }
-    )
-      .select("name slug basePrice salePrice")
-      .sort({ score: { $meta: "textScore" } })
-      .limit(8)
-      .lean();
+      })
+        .select("name slug basePrice salePrice")
+        .limit(8)
+        .lean();
 
-    if (textResults.length > 0) return textResults;
-  } catch (err) {
-    /* fall through to regex */
+      if (regexResults.length > 0) return regexResults;
+    } catch (err) {
+      /* fall through */
+    }
   }
 
-  // 2) Fallback: regex trên name (xử lý viết tắt như "ip16" → "iPhone 16")
-  try {
-    const regex = new RegExp(tokens.map(escapeRegex).join("|"), "i");
-    return await Product.find({
-      name: regex,
-      isActive: true,
-      deletedAt: null,
-    })
-      .select("name slug basePrice salePrice")
-      .limit(8)
-      .lean();
-  } catch (err) {
-    console.error("findRelatedProducts error:", err.message);
-    return [];
+  // 3) Fallback intent: nếu query đề cập đến loại sản phẩm (vd: "phòng bạt tốt nhất")
+  //    thì tìm theo category keyword tương ứng
+  for (const intent of INTENT_KEYWORDS) {
+    if (intent.match.test(query)) {
+      try {
+        const regex = new RegExp(intent.search, "i");
+        const results = await Product.find({
+          name: regex,
+          isActive: true,
+          deletedAt: null,
+        })
+          .select("name slug basePrice salePrice")
+          .limit(8)
+          .lean();
+        if (results.length > 0) return results;
+      } catch (err) {
+        /* ignore */
+      }
+    }
   }
+
+  return [];
 }
 
 exports.sendMessage = async (req, res) => {
