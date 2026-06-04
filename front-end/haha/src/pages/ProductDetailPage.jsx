@@ -171,6 +171,21 @@ export default function ProductDetailPage() {
     return () => window.removeEventListener("wishlistUpdated", sync);
   }, [product]);
 
+  // Chuyển variant object → chuỗi label để lưu vào giỏ (tránh render object ra JSX)
+  const variantLabel = selectedVariant
+    ? (selectedVariant.name
+        || Object.entries(
+            selectedVariant.attributes instanceof Map
+              ? Object.fromEntries(selectedVariant.attributes)
+              : (selectedVariant.attributes ?? {})
+          )
+            .filter(([k]) => !HIDDEN_ATTR_KEYS.has(k))
+            .map(([, v]) => v)
+            .join(" / ")
+        || selectedVariant.sku
+        || null)
+    : null;
+
   const handleAddToCart = () => {
     const stock = selectedVariant ? selectedVariant.stock : product.stock;
     if (qty > stock) {
@@ -184,7 +199,7 @@ export default function ProductDetailPage() {
       name: product.name,
       image: img,
       price: effectivePrice,
-      variant: selectedVariant,
+      variant: variantLabel,
       variantId: selectedVariant?._id ?? null,
       quantity: qty,
     });
@@ -206,7 +221,7 @@ export default function ProductDetailPage() {
           name: product.name,
           image: img,
           price: effectivePrice,
-          variant: selectedVariant,
+          variant: variantLabel,
           variantId: selectedVariant?._id ?? null,
           color: null,
           quantity: qty,
